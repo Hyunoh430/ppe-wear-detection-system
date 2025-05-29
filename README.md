@@ -94,7 +94,7 @@ python src/main.py
 
 ## 📌 To-Do Checklist
 
-* [ ] Collect and annotate dataset for goggles, mask, gloves
+* [v] Collect and annotate dataset for goggles, mask, gloves
 * [ ] Train YOLOv8 model with custom PPE dataset
 * [ ] Optimize MediaPipe inference for Pi
 * [ ] Implement wear judgment logic
@@ -112,3 +112,10 @@ If you're interested in contributing, feel free to fork the repo, suggest improv
 ## 📜 License
 
 This project is released under the MIT License.
+
+## 📂 DATASETS
+
+- **Handglove Detection Dataset**  
+  Source: [Roboflow Universe - Knowledgeflex](https://universe.roboflow.com/knowledgeflex/handglove-detection-7ftlj)  
+  Description: Includes images of hands with and without gloves for object detection (YOLO format).
+
