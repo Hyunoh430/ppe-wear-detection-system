@@ -95,6 +95,7 @@ python src/main.py
 ## 📌 To-Do Checklist
 
 * [v] Collect and annotate dataset for goggles, mask, gloves
+* [ ] With Mask & goggles dataset
 * [ ] Train YOLOv8 model with custom PPE dataset
 * [ ] Optimize MediaPipe inference for Pi
 * [ ] Implement wear judgment logic
