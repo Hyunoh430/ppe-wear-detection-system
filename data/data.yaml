@@ -1,0 +1,5 @@
+train: ./train
+val: ./test
+
+nc: 7
+names: ['mask_weared_incorrect', 'with_mask', 'without_mask', 'with_gloves', 'without_gloves', 'goggles_on', 'goggles_off']

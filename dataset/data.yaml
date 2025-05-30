@@ -1,5 +1,0 @@
-train: /path/to/train/images
-val: /path/to/val/images
-
-nc: 7
-names: ['mask_weared_incorrect', 'with_mask', 'without_mask', 'with_gloves', 'without_gloves', 'goggles_on', 'goggles_off']
