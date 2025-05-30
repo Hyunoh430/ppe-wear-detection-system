@@ -1,5 +1,5 @@
-train: ./train
-val: ./train    #임시로 train으로 val test
+train: ./train/images
+val: /Users/hyunoh/Documents/vscode/embedded/ppe-wear-detection-system/data/train    #임시로 train으로 val test
 #val: ./test      
 
 nc: 7
