@@ -104,15 +104,6 @@ python src/main.py
 
 ---
 
-## 🤝 Contributing
-
-If you're interested in contributing, feel free to fork the repo, suggest improvements, or open issues.
-
----
-
-## 📜 License
-
-This project is released under the MIT License.
 
 ## 📂 DATASETS
 
