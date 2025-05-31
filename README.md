@@ -116,7 +116,5 @@ This project is released under the MIT License.
 
 ## 📂 DATASETS
 
-- **Handglove Detection Dataset**  
-  Source: [Roboflow Universe - Knowledgeflex](https://universe.roboflow.com/knowledgeflex/handglove-detection-7ftlj)  
-  Description: Includes images of hands with and without gloves for object detection (YOLO format).
+
 
