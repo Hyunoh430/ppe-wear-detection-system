@@ -1,8 +1,8 @@
 import cv2
 import os
 
-video_path = '/Users/hyunoh/Documents/vscode/embedded/ppe-wear-detection-system/data/v2/incorrectmask_goggle_on2.mp4'
-output_folder = '/Users/hyunoh/Documents/vscode/embedded/ppe-wear-detection-system/data/v2/incorrectmask_goggle_on'
+video_path = '/Users/hyunoh/Documents/vscode/embedded/ppe-wear-detection-system/data/v2/nomask2.mp4'
+output_folder = '/Users/hyunoh/Documents/vscode/embedded/ppe-wear-detection-system/data/v2/61_nomask'
 os.makedirs(output_folder, exist_ok=True)
 
 cap = cv2.VideoCapture(video_path)
@@ -18,7 +18,7 @@ while cap.isOpened():
 
     # 1초당 1프레임 저장
     if frame_count % int(fps) == 0:
-        filename = f"{output_folder}/incorrectmask_goggle_on2_{saved_count:04d}.jpg"
+        filename = f"{output_folder}/61_nomask2_{saved_count:04d}.jpg"
         cv2.imwrite(filename, frame)
         saved_count += 1
 
