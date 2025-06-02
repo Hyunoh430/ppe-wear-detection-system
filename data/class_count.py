@@ -2,7 +2,7 @@ import os
 from collections import Counter
 
 # label 폴더 경로 지정 (예: train/labels 또는 test/labels)
-label_dir = 'train/labels'  # 또는 'test/labels'
+label_dir = './v1/train/labels'  # 또는 'test/labels'
 
 # 클래스 카운터 초기화
 class_counter = Counter()
