@@ -2,16 +2,17 @@ import os
 import shutil
 
 # 경로 설정
-source_label_dir = './hand_detection/train/labels'
-source_image_dir = './hand_detection/train/images'
+source_label_dir = './maskdataset/train/labels'
+source_image_dir = './maskdataset/train/images'
 
 target_label_dir = './v3/train/labels'
 target_image_dir = './v3/train/images'
 
 # 클래스 번호 매핑: 'hand 01' → 4, 'hand 02' → 5
 class_mapping = {
-    '0': '3',
-    '1': '4'
+    '0': '0',
+    '1': '1',
+    '2': '2'
 }
 
 # 라벨 수정 및 저장
