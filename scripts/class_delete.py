@@ -1,21 +1,36 @@
 import os
+import shutil
 
-# 라벨 디렉토리 경로 설정
-label_dirs = ['./v3/train/labels', './v3/test/labels']
+# 경로 설정
+label_path = "./maskdataset2/train/labels"
+image_path = "./maskdataset2/train/images"
+output_label_dir = "./filtered/train/labels"
+output_image_dir = "./filtered/train/images"
 
-for label_dir in label_dirs:
-    for filename in os.listdir(label_dir):
-        if filename.endswith('.txt'):
-            filepath = os.path.join(label_dir, filename)
+# 출력 폴더 생성
+os.makedirs(output_label_dir, exist_ok=True)
+os.makedirs(output_image_dir, exist_ok=True)
 
-            # 새로운 라벨 파일 내용 생성 (class 6 제거)
-            with open(filepath, 'r') as f:
-                lines = f.readlines()
+# 라벨 파일 반복
+for label_file in os.listdir(label_path):
+    if not label_file.endswith(".txt"):
+        continue
 
-            new_lines = [line for line in lines if not line.startswith('6 ')]
+    label_file_path = os.path.join(label_path, label_file)
+    with open(label_file_path, 'r') as f:
+        lines = f.readlines()
 
-            # 파일 덮어쓰기
-            with open(filepath, 'w') as f:
-                f.writelines(new_lines)
+    # 클래스 ID 2만 남김
+    class_2_lines = [line for line in lines if line.startswith("2 ")]
 
-print("✅ goggles_off (class 6) 라벨 제거 완료!")
+    if class_2_lines:
+        # 클래스 2 줄만 포함된 라벨 파일 저장
+        with open(os.path.join(output_label_dir, label_file), 'w') as f_out:
+            f_out.writelines(class_2_lines)
+
+        # 해당 이미지도 복사
+        img_file = label_file.replace(".txt", ".jpg")  # 확장자 맞게 조정 필요
+        src_img_path = os.path.join(image_path, img_file)
+        dst_img_path = os.path.join(output_image_dir, img_file)
+        if os.path.exists(src_img_path):
+            shutil.copy(src_img_path, dst_img_path)
