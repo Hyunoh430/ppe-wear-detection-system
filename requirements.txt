@@ -1,1 +1,3 @@
-나중에 적을 예정 ㅎㅎ
+opencv-python
+tensorflow==2.13.0
+numpy
