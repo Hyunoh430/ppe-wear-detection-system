@@ -17,7 +17,7 @@ input_height, input_width = input_shape[1], input_shape[2]
 
 # 클래스 이름 정의
 class_names = ['mask_weared_incorrect', 'with_mask', 'without_mask',
-               'with_gloves', 'without_gloves', 'goggles_on', 'goggles_off']
+               'with_gloves', 'without_gloves', 'goggles_on']
 
 # PiCamera2 초기화
 picam2 = Picamera2()
