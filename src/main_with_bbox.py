@@ -27,13 +27,13 @@ picam2.start()
 time.sleep(1)
 
 # NMS 함수
-def non_max_suppression(boxes, scores, iou_threshold=0.4):
+def non_max_suppression(boxes, scores, iou_threshold=0.45):
     if len(boxes) == 0:
         return []
     indices = cv2.dnn.NMSBoxes(
         bboxes=boxes,
         scores=scores,
-        score_threshold=0.3,  # 낮춰서 테스트 가능
+        score_threshold=0.25,
         nms_threshold=iou_threshold
     )
     return indices
@@ -58,21 +58,31 @@ while True:
         if len(det) < 6:
             continue
 
-        x, y, w, h, conf, cls_id = det
-        if conf < 0.3 or int(cls_id) >= len(class_names):
+        x_center, y_center, w, h, conf, cls_id = det
+
+        # 1. 전체 객체 신뢰도 (obj_conf * cls_conf) 가 0.25 미만이면 무시
+        if conf < 0.25:
+            continue
+        if int(cls_id) >= len(class_names):
             continue
 
-        x *= input_width
-        y *= input_height
-        w *= input_width
-        h *= input_height
+        # 2. 디코딩: YOLOv8 구조와 동일하게 중심좌표 → 좌상단 기준으로 변환
+        x1 = int((x_center - w / 2) * input_width)
+        y1 = int((y_center - h / 2) * input_height)
+        x2 = int((x_center + w / 2) * input_width)
+        y2 = int((y_center + h / 2) * input_height)
 
-        x1 = int(x - w / 2)
-        y1 = int(y - h / 2)
-        x1 = max(0, x1)
-        y1 = max(0, y1)
+        # 3. Clamp to image bounds
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(input_width - 1, x2), min(input_height - 1, y2)
+        w_pixel = x2 - x1
+        h_pixel = y2 - y1
 
-        boxes.append([x1, y1, int(w), int(h)])
+        # 4. 너무 작은 박스 무시 (노이즈 제거)
+        if w_pixel < 5 or h_pixel < 5:
+            continue
+
+        boxes.append([x1, y1, w_pixel, h_pixel])
         confidences.append(float(conf))
         class_ids.append(int(cls_id))
 
@@ -81,8 +91,7 @@ while True:
     if len(indices) > 0:
         for i in indices.flatten():
             x, y, w, h = boxes[i]
-            cls_id = class_ids[i]
-            label = f"{class_names[cls_id]} {confidences[i]:.2f}"
+            label = f"{class_names[class_ids[i]]} {confidences[i]:.2f}"
 
             cv2.rectangle(resized_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
             cv2.putText(resized_frame, label, (x, y - 10),
