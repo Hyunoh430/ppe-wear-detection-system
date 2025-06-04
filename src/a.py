@@ -13,3 +13,4 @@ for detail in output_details:
     print(f"  - Name: {detail['name']}")
     print(f"  - Shape: {detail['shape']}")
     print(f"  - Type: {detail['dtype']}")
+    print(len(interpreter.get_output_details()))

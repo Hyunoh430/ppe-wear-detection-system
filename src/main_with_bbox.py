@@ -45,7 +45,7 @@ while True:
     start_time = time.time()
     interpreter.set_tensor(input_details[0]['index'], input_tensor)
     interpreter.invoke()
-    output_data = interpreter.get_tensor(output_details[0]['index'])[0]
+    output_data = interpreter.get_tensor(output_details[0]['index'])[0]  # shape: (N, 6)
     end_time = time.time()
     fps = 1.0 / (end_time - start_time)
 
@@ -55,7 +55,7 @@ while True:
 
     for det in output_data:
         x, y, w, h, conf, cls_id = det
-        if conf < 0.8 or int(cls_id) >= len(class_names):
+        if conf < 0.5 or int(cls_id) >= len(class_names):
             continue
 
         # 정규화 좌표 → 픽셀 변환
