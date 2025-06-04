@@ -28,5 +28,6 @@ while True:
     if cv2.waitKey(1) & 0xFF == ord('q'):  # q 키 누르면 종료
         break
 
+
 cap.release()
 cv2.destroyAllWindows()
