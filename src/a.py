@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 # 모델 로드
-interpreter = tf.lite.Interpreter(model_path="models/best3_float32.tflite")
+interpreter = tf.lite.Interpreter(model_path="models/best3_float32_v3.tflite")
 interpreter.allocate_tensors()
 
 # 입력/출력 텐서 정보
