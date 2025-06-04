@@ -55,7 +55,7 @@ while True:
 
     for det in output_data:
         x, y, w, h, conf, cls_id = det
-        if conf < 0.5 or int(cls_id) >= len(class_names):
+        if conf < 0.8 or int(cls_id) >= len(class_names):
             continue
 
         # 정규화 좌표 → 픽셀 변환
