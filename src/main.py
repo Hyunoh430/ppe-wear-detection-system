@@ -45,7 +45,7 @@ while True:
     detected_classes = set()
     for det in output_data:
         x, y, w, h, conf, cls_id = det
-        if conf < 0.3:
+        if conf < 0.5:
             continue
 
         cls_id = int(cls_id)
