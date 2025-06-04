@@ -71,5 +71,6 @@ while True:
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
+
 picam2.close()
 cv2.destroyAllWindows()
