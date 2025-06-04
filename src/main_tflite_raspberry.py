@@ -4,20 +4,16 @@ import time
 from picamera2 import Picamera2
 import tensorflow as tf
 
-# TFLite 모델 로드
-interpreter = tf.lite.Interpreter(model_path="models/best3_float32_v3.tflite")
-interpreter.allocate_tensors()
-
-# 입력/출력 텐서 정보
-input_details = interpreter.get_input_details()
-output_details = interpreter.get_output_details()
-
-input_shape = input_details[0]['shape']
-input_height, input_width = input_shape[1], input_shape[2]
-
 # 클래스 이름 정의
 class_names = ['mask_weared_incorrect', 'with_mask', 'without_mask',
                'with_gloves', 'without_gloves', 'goggles_on']
+
+# TFLite 모델 로드
+interpreter = tf.lite.Interpreter(model_path="models/best3_float32_v3.tflite")
+interpreter.allocate_tensors()
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
+input_height, input_width = input_details[0]['shape'][1:3]
 
 # PiCamera2 초기화
 picam2 = Picamera2()
@@ -28,29 +24,46 @@ picam2.configure("preview")
 picam2.start()
 time.sleep(1)
 
+def non_max_suppression(predictions, iou_threshold=0.4, score_threshold=0.5):
+    boxes = []
+    scores = []
+    class_ids = []
+
+    for pred in predictions:
+        x, y, w, h, conf, cls_id = pred
+        if conf < score_threshold:
+            continue
+        x1 = x - w / 2
+        y1 = y - h / 2
+        x2 = x + w / 2
+        y2 = y + h / 2
+        boxes.append([x1, y1, x2, y2])
+        scores.append(conf)
+        class_ids.append(int(cls_id))
+
+    indices = cv2.dnn.NMSBoxes(boxes, scores, score_threshold, iou_threshold)
+    result = []
+    if len(indices) > 0:
+        for i in indices.flatten():
+            result.append((scores[i], class_ids[i]))
+    return result
+
 while True:
     frame = picam2.capture_array()
     input_tensor = np.expand_dims(frame, axis=0).astype(np.float32)
 
-    # 추론 시작 시간 기록
     start_time = time.time()
 
     interpreter.set_tensor(input_details[0]['index'], input_tensor)
     interpreter.invoke()
-    output_data = interpreter.get_tensor(output_details[0]['index'])[0]  # shape: (300, 6)
+    output_data = interpreter.get_tensor(output_details[0]['index'])[0]
+
+    detections = non_max_suppression(output_data)
 
     end_time = time.time()
     fps = 1.0 / (end_time - start_time)
 
-    detected_classes = set()
-    for det in output_data:
-        x, y, w, h, conf, cls_id = det
-        if conf < 0.5:
-            continue
-
-        cls_id = int(cls_id)
-        if cls_id < len(class_names):
-            detected_classes.add(class_names[cls_id])
+    detected_classes = {class_names[cls_id] for conf, cls_id in detections}
 
     print(f"[FPS: {fps:.2f}] Detected: {', '.join(detected_classes) if detected_classes else 'None'}")
 
