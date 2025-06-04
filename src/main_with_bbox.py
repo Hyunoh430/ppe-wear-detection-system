@@ -4,21 +4,20 @@ import time
 from picamera2 import Picamera2
 import tensorflow as tf
 
-# TFLite 모델 로드
+# 클래스 이름 정의
+class_names = ['mask_weared_incorrect', 'with_mask', 'without_mask',
+               'with_gloves', 'without_gloves', 'goggles_on']
+
+# TFLite 모델 로드 (NMS 포함 모델)
 interpreter = tf.lite.Interpreter(model_path="models/best3_float32_v3.tflite")
 interpreter.allocate_tensors()
 
-# 입력/출력 텐서 정보
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 input_shape = input_details[0]['shape']
 input_height, input_width = input_shape[1], input_shape[2]
 
-# 클래스 이름 정의
-class_names = ['mask_weared_incorrect', 'with_mask', 'without_mask',
-               'with_gloves', 'without_gloves', 'goggles_on']
-
-# PiCamera2 초기화
+# PiCamera2 설정
 picam2 = Picamera2()
 picam2.preview_configuration.main.size = (input_width, input_height)
 picam2.preview_configuration.main.format = "RGB888"
@@ -27,86 +26,40 @@ picam2.configure("preview")
 picam2.start()
 time.sleep(1)
 
-# NMS 함수
-def non_max_suppression(boxes, scores, iou_threshold=0.4):
-    if len(boxes) == 0:
-        return []
-    indices = cv2.dnn.NMSBoxes(
-        bboxes=boxes,
-        scores=scores,
-        score_threshold=0.3,  # 낮춰서 확인
-        nms_threshold=iou_threshold
-    )
-    return indices
-
 while True:
     frame = picam2.capture_array()
     resized_frame = cv2.resize(frame, (input_width, input_height))
-    
-    # 디버깅: 입력 이미지 상태 확인
-    print(">>> Input frame shape:", resized_frame.shape)
-    print("    Pixel min/max:", resized_frame.min(), resized_frame.max())
-
     input_tensor = np.expand_dims(resized_frame / 255.0, axis=0).astype(np.float32)
-    print(">>> Input tensor shape:", input_tensor.shape)
-    print("    Tensor min/max:", input_tensor.min(), input_tensor.max())
 
-    # 추론
     start_time = time.time()
     interpreter.set_tensor(input_details[0]['index'], input_tensor)
     interpreter.invoke()
-    output_data = interpreter.get_tensor(output_details[0]['index'])[0]  # shape: (N, 6)
     end_time = time.time()
     fps = 1.0 / (end_time - start_time + 1e-6)
 
-    print(">>> Raw output (first 5):")
-    print(output_data[:5])
+    # 출력 텐서 가져오기
+    boxes = interpreter.get_tensor(output_details[0]['index'])[0]      # [N, 4]
+    classes = interpreter.get_tensor(output_details[1]['index'])[0]    # [N]
+    scores = interpreter.get_tensor(output_details[2]['index'])[0]     # [N]
+    num = int(interpreter.get_tensor(output_details[3]['index'])[0])   # []
 
-    boxes = []
-    confidences = []
-    class_ids = []
-
-    for det in output_data:
-        if len(det) < 6:
+    for i in range(num):
+        score = scores[i]
+        if score < 0.3:
             continue
 
-        x, y, w, h, conf, cls_id = det
-        if conf < 0.3 or int(cls_id) >= len(class_names):
-            continue
+        ymin, xmin, ymax, xmax = boxes[i]
+        cls_id = int(classes[i])
 
-        # 정규화 좌표 → 픽셀 변환
-        x *= input_width
-        y *= input_height
-        w *= input_width
-        h *= input_height
+        x1 = int(xmin * input_width)
+        y1 = int(ymin * input_height)
+        x2 = int(xmax * input_width)
+        y2 = int(ymax * input_height)
 
-        x1 = int(x - w / 2)
-        y1 = int(y - h / 2)
-        x1 = max(0, x1)
-        y1 = max(0, y1)
-
-        boxes.append([x1, y1, int(w), int(h)])
-        confidences.append(float(conf))
-        class_ids.append(int(cls_id))
-
-    print(f">>> Boxes before NMS: {len(boxes)}")
-    print(f"    Confidences: {confidences}")
-
-    indices = non_max_suppression(boxes, confidences)
-
-    print(f">>> NMS selected indices: {indices}")
-
-    if len(indices) > 0:
-        for i in indices.flatten():
-            x, y, w, h = boxes[i]
-            cls_id = class_ids[i]
-            label = f"{class_names[cls_id]} {confidences[i]:.2f}"
-
-            cv2.rectangle(resized_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            cv2.putText(resized_frame, label, (x, y - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-    else:
-        print(">>> No detection passed NMS.\n")
+        label = f"{class_names[cls_id]} {score:.2f}"
+        cv2.rectangle(resized_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.putText(resized_frame, label, (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
     cv2.putText(resized_frame, f"FPS: {fps:.2f}", (5, 20),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
