@@ -27,8 +27,10 @@ picam2.configure("preview")
 picam2.start()
 time.sleep(1)
 
-# NMS 함수
+# NMS 함수 (좌표는 x,y,w,h)
 def non_max_suppression(boxes, scores, iou_threshold=0.4):
+    if len(boxes) == 0:
+        return []
     indices = cv2.dnn.NMSBoxes(
         bboxes=boxes,
         scores=scores,
@@ -39,22 +41,24 @@ def non_max_suppression(boxes, scores, iou_threshold=0.4):
 
 while True:
     frame = picam2.capture_array()
-    resized_frame = cv2.resize(frame, (320, 320))  # 모델 input과 정확히 맞춰야 함
+    resized_frame = cv2.resize(frame, (input_width, input_height))
     input_tensor = np.expand_dims(resized_frame, axis=0).astype(np.float32)
-
 
     start_time = time.time()
     interpreter.set_tensor(input_details[0]['index'], input_tensor)
     interpreter.invoke()
     output_data = interpreter.get_tensor(output_details[0]['index'])[0]  # shape: (N, 6)
     end_time = time.time()
-    fps = 1.0 / (end_time - start_time)
+    fps = 1.0 / (end_time - start_time + 1e-6)
 
     boxes = []
     confidences = []
     class_ids = []
 
     for det in output_data:
+        if len(det) < 6:
+            continue  # 방어적 코딩
+
         x, y, w, h, conf, cls_id = det
         if conf < 0.5 or int(cls_id) >= len(class_names):
             continue
