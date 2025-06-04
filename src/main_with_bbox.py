@@ -27,14 +27,14 @@ picam2.configure("preview")
 picam2.start()
 time.sleep(1)
 
-# NMS 함수 (좌표는 x,y,w,h)
+# NMS 함수
 def non_max_suppression(boxes, scores, iou_threshold=0.4):
     if len(boxes) == 0:
         return []
     indices = cv2.dnn.NMSBoxes(
         bboxes=boxes,
         scores=scores,
-        score_threshold=0.5,
+        score_threshold=0.3,  # 낮춰서 확인
         nms_threshold=iou_threshold
     )
     return indices
@@ -42,8 +42,16 @@ def non_max_suppression(boxes, scores, iou_threshold=0.4):
 while True:
     frame = picam2.capture_array()
     resized_frame = cv2.resize(frame, (input_width, input_height))
-    input_tensor = np.expand_dims(resized_frame, axis=0).astype(np.float32)
+    
+    # 디버깅: 입력 이미지 상태 확인
+    print(">>> Input frame shape:", resized_frame.shape)
+    print("    Pixel min/max:", resized_frame.min(), resized_frame.max())
 
+    input_tensor = np.expand_dims(resized_frame / 255.0, axis=0).astype(np.float32)
+    print(">>> Input tensor shape:", input_tensor.shape)
+    print("    Tensor min/max:", input_tensor.min(), input_tensor.max())
+
+    # 추론
     start_time = time.time()
     interpreter.set_tensor(input_details[0]['index'], input_tensor)
     interpreter.invoke()
@@ -51,16 +59,19 @@ while True:
     end_time = time.time()
     fps = 1.0 / (end_time - start_time + 1e-6)
 
+    print(">>> Raw output (first 5):")
+    print(output_data[:5])
+
     boxes = []
     confidences = []
     class_ids = []
 
     for det in output_data:
         if len(det) < 6:
-            continue  # 방어적 코딩
+            continue
 
         x, y, w, h, conf, cls_id = det
-        if conf < 0.5 or int(cls_id) >= len(class_names):
+        if conf < 0.3 or int(cls_id) >= len(class_names):
             continue
 
         # 정규화 좌표 → 픽셀 변환
@@ -78,7 +89,12 @@ while True:
         confidences.append(float(conf))
         class_ids.append(int(cls_id))
 
+    print(f">>> Boxes before NMS: {len(boxes)}")
+    print(f"    Confidences: {confidences}")
+
     indices = non_max_suppression(boxes, confidences)
+
+    print(f">>> NMS selected indices: {indices}")
 
     if len(indices) > 0:
         for i in indices.flatten():
@@ -89,6 +105,8 @@ while True:
             cv2.rectangle(resized_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
             cv2.putText(resized_frame, label, (x, y - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+    else:
+        print(">>> No detection passed NMS.\n")
 
     cv2.putText(resized_frame, f"FPS: {fps:.2f}", (5, 20),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
