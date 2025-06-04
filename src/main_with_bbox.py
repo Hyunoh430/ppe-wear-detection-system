@@ -27,10 +27,18 @@ picam2.configure("preview")
 picam2.start()
 time.sleep(1)
 
+# NMS 함수
+def non_max_suppression(boxes, scores, iou_threshold=0.4):
+    indices = cv2.dnn.NMSBoxes(
+        bboxes=boxes,
+        scores=scores,
+        score_threshold=0.5,
+        nms_threshold=iou_threshold
+    )
+    return indices
+
 while True:
     frame = picam2.capture_array()
-
-    # 리사이즈 후 복사본 유지
     resized_frame = cv2.resize(frame, (input_width, input_height))
     input_tensor = np.expand_dims(resized_frame, axis=0).astype(np.float32)
 
@@ -41,15 +49,16 @@ while True:
     end_time = time.time()
     fps = 1.0 / (end_time - start_time)
 
+    boxes = []
+    confidences = []
+    class_ids = []
+
     for det in output_data:
         x, y, w, h, conf, cls_id = det
-        if conf < 0.5:
-            continue
-        cls_id = int(cls_id)
-        if cls_id >= len(class_names):
+        if conf < 0.5 or int(cls_id) >= len(class_names):
             continue
 
-        # 정규화된 좌표를 이미지 크기에 맞게 변환
+        # 정규화 좌표 → 픽셀 변환
         x *= input_width
         y *= input_height
         w *= input_width
@@ -57,12 +66,24 @@ while True:
 
         x1 = int(x - w / 2)
         y1 = int(y - h / 2)
-        x2 = int(x + w / 2)
-        y2 = int(y + h / 2)
+        x1 = max(0, x1)
+        y1 = max(0, y1)
 
-        cv2.rectangle(resized_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.putText(resized_frame, f"{class_names[cls_id]} {conf:.2f}", (x1, y1 - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        boxes.append([x1, y1, int(w), int(h)])
+        confidences.append(float(conf))
+        class_ids.append(int(cls_id))
+
+    indices = non_max_suppression(boxes, confidences)
+
+    if len(indices) > 0:
+        for i in indices.flatten():
+            x, y, w, h = boxes[i]
+            cls_id = class_ids[i]
+            label = f"{class_names[cls_id]} {confidences[i]:.2f}"
+
+            cv2.rectangle(resized_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            cv2.putText(resized_frame, label, (x, y - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
     cv2.putText(resized_frame, f"FPS: {fps:.2f}", (5, 20),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
@@ -74,4 +95,3 @@ while True:
 
 picam2.close()
 cv2.destroyAllWindows()
-
