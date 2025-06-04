@@ -35,51 +35,51 @@ class YOLOv8TFLiteDetector:
             (255, 255, 0)   # goggles_on - 청록색
         ]
         
-        print(f"모델 로드 완료 - 입력 크기: {self.input_width}x{self.input_height}")
-        print(f"출력 형태: [1, 300, 6] (300개 탐지 결과)")
-        print(f"클래스 수: {len(self.class_names)}")
-        print("클래스 목록:", self.class_names)
+        print(f"Model loaded successfully - Input size: {self.input_width}x{self.input_height}")
+        print(f"Output shape: [1, 300, 6] (300 detection results)")
+        print(f"Number of classes: {len(self.class_names)}")
+        print("Class names:", self.class_names)
     
     def preprocess_image(self, image):
-        """이미지 전처리"""
-        # 320x320으로 리사이즈
+        """Image preprocessing"""
+        # Resize to 320x320
         resized = cv2.resize(image, (self.input_width, self.input_height))
-        # 정규화 (0-255 -> 0-1)
+        # Normalize (0-255 -> 0-1)
         normalized = resized.astype(np.float32) / 255.0
-        # 배치 차원 추가
+        # Add batch dimension
         input_tensor = np.expand_dims(normalized, axis=0)
         return input_tensor
     
     def postprocess_predictions(self, predictions, original_shape, confidence_threshold=0.5):
-        """예측 결과 후처리 - 모델 출력: [1, 300, 6] 형태"""
+        """Post-process predictions - Model output: [1, 300, 6] format"""
         detections = []
         
-        # 배치 차원 제거: [1, 300, 6] -> [300, 6]
+        # Remove batch dimension: [1, 300, 6] -> [300, 6]
         if len(predictions.shape) == 3:
             predictions = predictions[0]
         
         original_height, original_width = original_shape[:2]
         
-        # 각 탐지 결과 처리 (300개의 탐지 결과)
+        # Process each detection result (300 detection results)
         for detection in predictions:
             x_center, y_center, width, height, confidence, class_id = detection
             
-            # 신뢰도 임계값 확인
+            # Check confidence threshold
             if confidence > confidence_threshold:
-                # 정규화된 좌표를 픽셀 좌표로 변환
-                # YOLOv8 TFLite는 0-1 범위의 정규화된 좌표를 출력
+                # Convert normalized coordinates to pixel coordinates
+                # YOLOv8 TFLite outputs normalized coordinates in 0-1 range
                 x_center_pixel = x_center * original_width
                 y_center_pixel = y_center * original_height  
                 width_pixel = width * original_width
                 height_pixel = height * original_height
                 
-                # 바운딩 박스 좌표 계산 (x1, y1, x2, y2)
+                # Calculate bounding box coordinates (x1, y1, x2, y2)
                 x1 = int(x_center_pixel - width_pixel / 2)
                 y1 = int(y_center_pixel - height_pixel / 2)
                 x2 = int(x_center_pixel + width_pixel / 2)
                 y2 = int(y_center_pixel + height_pixel / 2)
                 
-                # 이미지 경계 내로 제한
+                # Clip to image boundaries
                 x1 = max(0, min(x1, original_width - 1))
                 y1 = max(0, min(y1, original_height - 1))
                 x2 = max(0, min(x2, original_width - 1))
@@ -97,45 +97,45 @@ class YOLOv8TFLiteDetector:
         return detections
     
     def detect(self, image, confidence_threshold=0.5):
-        """객체 탐지 수행"""
-        # 전처리
+        """Perform object detection"""
+        # Preprocessing
         input_tensor = self.preprocess_image(image)
         
-        # 추론
+        # Inference
         self.interpreter.set_tensor(self.input_details[0]['index'], input_tensor)
         self.interpreter.invoke()
         
-        # 출력 가져오기
+        # Get output
         predictions = self.interpreter.get_tensor(self.output_details[0]['index'])
         
-        # 후처리
+        # Post-processing
         detections = self.postprocess_predictions(predictions, image.shape, confidence_threshold)
         
         return detections
     
     def draw_detections(self, image, detections):
-        """탐지 결과를 이미지에 그리기"""
+        """Draw detection results on image"""
         for detection in detections:
             x1, y1, x2, y2 = detection['bbox']
             confidence = detection['confidence']
             class_id = detection['class_id']
             class_name = detection['class_name']
             
-            # 바운딩 박스 색상
+            # Bounding box color
             color = self.colors[class_id % len(self.colors)]
             
-            # 바운딩 박스 그리기
+            # Draw bounding box
             cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
             
-            # 라벨 텍스트
+            # Label text
             label = f"{class_name}: {confidence:.2f}"
             
-            # 텍스트 배경 크기 계산
+            # Calculate text background size
             (text_width, text_height), baseline = cv2.getTextSize(
                 label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2
             )
             
-            # 텍스트 배경 그리기
+            # Draw text background
             cv2.rectangle(
                 image, 
                 (x1, y1 - text_height - baseline - 5),
@@ -144,7 +144,7 @@ class YOLOv8TFLiteDetector:
                 -1
             )
             
-            # 텍스트 그리기
+            # Draw text
             cv2.putText(
                 image, label, (x1, y1 - 5),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2
@@ -153,72 +153,72 @@ class YOLOv8TFLiteDetector:
         return image
 
 def main():
-    # TFLite 모델 경로 (실제 경로로 변경하세요)
+    # TFLite model path (change to your actual path)
     model_path = "models/best3_float32_v3.tflite"
     
     try:
-        # YOLOv8 TFLite 탐지기 초기화
+        # Initialize YOLOv8 TFLite detector
         detector = YOLOv8TFLiteDetector(model_path)
         
-        # Picamera2 초기화
+        # Initialize Picamera2
         picam2 = Picamera2()
         
-        # 카메라 설정
+        # Camera configuration
         config = picam2.create_preview_configuration(
             main={"size": (640, 480), "format": "RGB888"}
         )
         picam2.configure(config)
         picam2.start()
         
-        print("카메라 시작됨. 'q'를 눌러 종료하세요.")
+        print("Camera started. Press 'q' to quit.")
         
-        # FPS 계산을 위한 변수
+        # Variables for FPS calculation
         fps_counter = 0
         fps_start_time = time.time()
         
         while True:
-            # 프레임 캡처
+            # Capture frame
             frame = picam2.capture_array()
             
-            # 객체 탐지
+            # Object detection
             detections = detector.detect(frame, confidence_threshold=0.5)
             
-            # 탐지된 클래스 이름 출력 (탐지가 있을 때만)
+            # Print detected class names (only when there are detections)
             if detections:
                 detected_classes = [f"{d['class_name']}({d['confidence']:.2f})" for d in detections]
-                print(f"탐지된 객체: {', '.join(detected_classes)}")
+                print(f"Detected objects: {', '.join(detected_classes)}")
             
-            # 바운딩 박스 그리기
+            # Draw bounding boxes
             annotated_frame = detector.draw_detections(frame.copy(), detections)
             
-            # FPS 계산 및 표시
+            # Calculate and display FPS
             fps_counter += 1
-            if fps_counter % 10 == 0:  # 10프레임마다 FPS 계산
+            if fps_counter % 10 == 0:  # Calculate FPS every 10 frames
                 current_time = time.time()
                 fps = 10 / (current_time - fps_start_time)
                 print(f"FPS: {fps:.2f}")
                 fps_start_time = current_time
             
-            # FPS를 이미지에 표시
+            # Display FPS on image
             cv2.putText(
                 annotated_frame, f"Objects: {len(detections)}", 
                 (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2
             )
             
-            # 결과 표시
+            # Show result
             cv2.imshow("PPE Detection", annotated_frame)
             
-            # 'q' 키를 누르면 종료
+            # Press 'q' to quit
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
     
     except FileNotFoundError:
-        print(f"모델 파일을 찾을 수 없습니다: {model_path}")
-        print("모델 파일 경로를 확인하고 다시 시도하세요.")
+        print(f"Model file not found: {model_path}")
+        print("Please check the model file path and try again.")
     except Exception as e:
-        print(f"오류 발생: {str(e)}")
+        print(f"Error occurred: {str(e)}")
     finally:
-        # 정리
+        # Cleanup
         try:
             picam2.stop()
         except:
