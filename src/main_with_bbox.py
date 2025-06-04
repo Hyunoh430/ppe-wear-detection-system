@@ -39,8 +39,9 @@ def non_max_suppression(boxes, scores, iou_threshold=0.4):
 
 while True:
     frame = picam2.capture_array()
-    resized_frame = cv2.resize(frame, (input_width, input_height))
+    resized_frame = cv2.resize(frame, (320, 320))  # 모델 input과 정확히 맞춰야 함
     input_tensor = np.expand_dims(resized_frame, axis=0).astype(np.float32)
+
 
     start_time = time.time()
     interpreter.set_tensor(input_details[0]['index'], input_tensor)
