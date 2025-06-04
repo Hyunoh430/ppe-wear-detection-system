@@ -4,18 +4,20 @@ import time
 from picamera2 import Picamera2
 import tensorflow as tf
 
-# 클래스 이름 정의
+# 클래스 정의
 class_names = ['mask_weared_incorrect', 'with_mask', 'without_mask',
                'with_gloves', 'without_gloves', 'goggles_on']
 
-# TFLite 모델 로드
+# 모델 로드
 interpreter = tf.lite.Interpreter(model_path="models/best3_float32_v3.tflite")
 interpreter.allocate_tensors()
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
-input_height, input_width = input_details[0]['shape'][1:3]
 
-# PiCamera2 초기화
+# 입력 크기 고정 (320x320)
+input_height, input_width = 320, 320
+
+# PiCamera 설정
 picam2 = Picamera2()
 picam2.preview_configuration.main.size = (input_width, input_height)
 picam2.preview_configuration.main.format = "RGB888"
@@ -50,7 +52,10 @@ def non_max_suppression(predictions, iou_threshold=0.4, score_threshold=0.5):
 
 while True:
     frame = picam2.capture_array()
-    input_tensor = np.expand_dims(frame, axis=0).astype(np.float32)
+
+    # 프레임을 320x320으로 resize 후 float32로 변환
+    resized = cv2.resize(frame, (input_width, input_height))
+    input_tensor = np.expand_dims(resized, axis=0).astype(np.float32)
 
     start_time = time.time()
 
