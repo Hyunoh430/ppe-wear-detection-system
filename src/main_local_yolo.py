@@ -2,7 +2,7 @@ from ultralytics import YOLO
 import cv2
 
 # 모델 경로 (.pt 파일 경로 입력)
-model = YOLO('models/best3.pt')  # 예: 'runs/detect/train/weights/best.pt'
+model = YOLO('models/yolov5nu.pt')  # 예: 'runs/detect/train/weights/best.pt'
 
 # 처리할 입력 소스 설정
 # 0: 웹캠 / 'path/to/video.mp4': 동영상 / 'path/to/image.jpg': 이미지
