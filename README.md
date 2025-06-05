@@ -1,111 +1,211 @@
-# 🥽 PPE Wear Detection System
+# PPE Waste Disposal System
 
-## 📘 Project Overview
+A Raspberry Pi-based Personal Protective Equipment (PPE) detection and waste disposal system. This system uses a YOLO model to detect mask, gloves, and goggles wearing in real-time, and only opens the waste disposal entrance when all protective equipment is properly worn.
 
-This project aims to enhance laboratory and industrial safety by detecting whether workers are properly wearing Personal Protective Equipment (PPE) such as goggles, masks, and gloves. It uses a Raspberry Pi with real-time camera input and integrates deep learning and pose estimation technologies to provide accurate and intelligent feedback.
+## 🚀 Key Features
 
----
+- **Real-time PPE Detection**: High-performance object detection using YOLOv8 TFLite model
+- **Automatic Door Control**: Automatic opening/closing of waste disposal entrance via servo motor
+- **Safety Features**: 3-second continuous PPE verification before door opening
+- **Auto Timer**: Automatic door closing after 5 seconds
+- **Real-time Monitoring**: Real-time logging of FPS, detection status, and door status
+- **Object-Oriented Design**: Modular code structure for improved maintainability
 
-## 🧠 Core Idea
+## 📋 System Requirements
 
-Automatically determine whether PPE is being worn correctly using:
+### Hardware
+- Raspberry Pi 4 (recommended) or compatible model
+- Raspberry Pi Camera Module
+- SG90 Servo Motor (or compatible model)
+- GPIO connection jumper wires
 
-* **YOLOv8**: For object detection (goggles, masks, gloves)
-* **MediaPipe**: For pose/keypoint estimation (eyes, nose, mouth, hands)
-* **TTS / GUI / GPIO**: For real-time alerts and control actions
+### Software
+- Python 3.7+
+- TensorFlow Lite
+- OpenCV
+- Picamera2
+- RPi.GPIO
 
----
+## 🛠 Installation
 
-## 🧩 Technologies Used
+1. **Clone Repository**
+```bash
+git clone <repository-url>
+cd ppe-waste-disposal-system
+```
 
-* **YOLOv8 (Ultralytics)** for detecting PPE items in the frame
-* **MediaPipe** for precise body keypoint tracking
-* **OpenCV** for camera input and image processing
-* **gTTS or pyttsx3** for audio alerts (TTS)
-* **RPi.GPIO** for controlling hardware elements like a waste bin lock
+2. **Install Required Packages**
+```bash
+pip install tensorflow-lite opencv-python numpy picamera2 RPi.GPIO
+```
 
----
+3. **Prepare Model File**
+```bash
+mkdir models
+# Place best3_float32_v3.tflite file in models/ directory
+```
 
-## 🗂️ Folder Structure
+4. **Hardware Connection**
+- Connect servo motor to GPIO pin 2
+- Connect and activate camera module
 
-```plaintext
-ppe-wear-detection-system/
-├── README.md
-├── requirements.txt
-├── models/
-│   ├── yolov8n_ppe.pt
-│   └── pose_landmark.tflite
+## 📁 Project Structure
+
+```
+ppe-waste-disposal-system/
 ├── src/
-│   ├── main.py
-│   ├── detector.py
-│   ├── pose_estimator.py
-│   ├── ppe_judger.py
-│   ├── notifier.py
-│   └── utils.py
-├── data/
-│   ├── sample_images/
-│   └── inference_results/
-├── scripts/
-│   ├── convert_to_tflite.py
-│   └── label_analysis.py
-└── config/
-    └── config.yaml
+│   ├── __init__.py              # Package initialization
+│   ├── config.py                # Configuration management
+│   ├── ppe_detector.py          # PPE detection class
+│   ├── servo_controller.py      # Servo motor control class
+│   ├── waste_disposal_system.py # Main system class
+│   └── utils.py                 # Utility functions
+├── models/
+│   └── best3_float32_v3.tflite  # YOLO model file
+├── logs/                        # Log file storage
+├── main.py                      # Main execution file
+└── README.md                    # Project documentation
 ```
 
----
+## 🎯 Usage
 
-## ⚙️ How It Works
-
-1. **Camera Input**: Captures real-time video stream from Pi camera or USB webcam
-2. **YOLOv8 Detection**: Identifies bounding boxes for PPE and (optionally) human body
-3. **MediaPipe Pose Estimation**: Extracts facial and hand keypoints
-4. **Judgment Logic**: Checks whether PPE bounding boxes cover the appropriate body keypoints
-5. **Smoothing & Decision**: Confirms consistent miswear before triggering warning
-6. **Notifier**: Delivers voice, GUI, or GPIO control responses
-
----
-
-## 📦 Setup & Requirements
-
-Install dependencies:
-
+### Basic Execution
 ```bash
-pip install -r requirements.txt
+python main.py
 ```
 
-Ensure the following packages are included:
-
-* `ultralytics`
-* `opencv-python`
-* `mediapipe`
-* `numpy`
-* `gtts` or `pyttsx3`
-* `RPi.GPIO` (for Raspberry Pi GPIO control)
-
----
-
-## ▶️ Run the System
-
+### Execution with Options
 ```bash
-python src/main_tflite_raspberry.py
+# Debug mode
+python main.py --debug
+
+# Use custom model
+python main.py --model path/to/model.tflite
+
+# Specify log file
+python main.py --log-file system.log
+
+# Run component tests only
+python main.py --test-only
+
+# Check system requirements
+python main.py --check-requirements
 ```
 
----
+### Execution Process
 
-## 📌 To-Do Checklist
+1. **System Start**: Initialize all components
+2. **PPE Detection Wait**: Real-time monitoring with camera
+3. **Condition Check**: 
+   - ✅ Mask worn (`with_mask`)
+   - ✅ Gloves worn (`with_gloves`) 
+   - ✅ Goggles worn (`goggles_on`)
+   - ❌ No improper wearing
+4. **Timer Start**: 3-second continuous PPE verification
+5. **Door Opening**: Automatic opening when conditions are met
+6. **Auto Closing**: Automatic door closing after 5 seconds
 
-* [v] Collect and annotate dataset for goggles, mask, gloves
-* [ ] With Mask & goggles dataset
-* [ ] Train YOLOv8 model with custom PPE dataset
-* [ ] Optimize MediaPipe inference for Pi
-* [ ] Implement wear judgment logic
-* [ ] Integrate TTS and GPIO control
-* [ ] Test full pipeline in real environment
+## ⚙️ Configuration Customization
 
----
+You can adjust various settings in the `src/config.py` file:
 
+```python
+# PPE check duration (seconds)
+PPE_CHECK_DURATION = 3.0
 
-## 📂 DATASETS
+# Door open duration (seconds)  
+DOOR_OPEN_DURATION = 5.0
 
+# Detection confidence threshold
+CONFIDENCE_THRESHOLD = 0.3
 
+# Servo motor angle settings
+SERVO_CLOSED_ANGLE = 20   # Closed state
+SERVO_OPEN_ANGLE = 120    # Open state
+```
 
+## 🔧 Hardware Connection
+
+### Servo Motor Connection
+```
+Servo Motor    ->  Raspberry Pi
+VCC (Red)      ->  5V (Pin 2)
+GND (Brown)    ->  GND (Pin 6)  
+Signal(Orange) ->  GPIO 2 (Pin 3)
+```
+
+### Camera Connection
+- Connect Raspberry Pi Camera Module to CSI port
+- Enable camera in `sudo raspi-config`
+
+## 📊 Monitoring and Logging
+
+The system logs the following information in real-time:
+
+- **FPS**: Frames processed per second
+- **Detection Results**: List of detected PPE with confidence scores
+- **Door Status**: Open/closed/moving status
+- **Compliance**: PPE wearing compliance status
+- **Statistics**: Total frames, detection count, door opening count
+
+## 🛡 Safety Features
+
+- **Emergency Stop**: `Ctrl+C` or `emergency_stop()` method
+- **Auto Recovery**: Return to safe state when errors occur
+- **Permission Check**: Verify GPIO and camera access permissions
+- **Resource Cleanup**: Automatic resource release on system shutdown
+
+## 🐛 Troubleshooting
+
+### Permission Errors
+```bash
+# Grant GPIO permissions
+sudo usermod -a -G gpio $USER
+
+# Or run with sudo
+sudo python main.py
+```
+
+### Camera Errors
+```bash
+# Check camera activation
+sudo raspi-config
+# -> Interface Options -> Camera -> Enable
+```
+
+### Model File Errors
+- Verify correct TFLite file exists in `models/` directory
+- Check file path and permissions
+
+## 📈 Performance Optimization
+
+Recommendations for optimal performance on Raspberry Pi:
+
+1. **Model Optimization**: Use quantized TFLite models
+2. **Resolution Adjustment**: Adjust camera resolution as needed
+3. **CPU Overclocking**: Improve CPU performance within stable limits
+4. **Memory Split**: Adjust GPU memory allocation
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
+
+## 📄 License
+
+This project is distributed under the MIT License. See the LICENSE file for details.
+
+## 👥 Development Team
+
+- **PPE Safety Team** - Initial development and maintenance
+
+## 🔮 Future Plans
+
+- [ ] Web-based monitoring dashboard
+- [ ] Multi-camera support
+- [ ] Cloud logging integration
+- [ ] Mobile app integration
+- [ ] AI model performance improvements
