@@ -237,188 +237,188 @@ class ServoController:
 # ==========================================
 
 def test_servo_basic():
-    """기본 서보모터 테스트"""
+    """Basic servo motor test"""
     print("=" * 50)
-    print("서보모터 기본 테스트")
+    print("Servo Motor Basic Test")
     print("=" * 50)
     
     try:
-        print("1. 서보 컨트롤러 초기화...")
+        print("1. Servo controller initialization...")
         with ServoController() as servo:
-            print("   ✓ 초기화 성공!")
-            print(f"   현재 각도: {servo.get_current_angle()}°")
-            print(f"   도어 상태: {servo.get_door_state().value}")
+            print("   ✓ Initialization successful!")
+            print(f"   Current angle: {servo.get_current_angle()}°")
+            print(f"   Door state: {servo.get_door_state().value}")
             
-            print("\n2. 도어 열기 테스트...")
+            print("\n2. Door opening test...")
             if servo.open_door():
-                print("   ✓ 도어 열기 성공!")
-                print(f"   현재 각도: {servo.get_current_angle()}°")
-                print(f"   도어 상태: {servo.get_door_state().value}")
+                print("   ✓ Door opening successful!")
+                print(f"   Current angle: {servo.get_current_angle()}°")
+                print(f"   Door state: {servo.get_door_state().value}")
             else:
-                print("   ✗ 도어 열기 실패!")
+                print("   ✗ Door opening failed!")
                 return False
             
             import time
-            print("   3초 대기...")
+            print("   Waiting 3 seconds...")
             time.sleep(3)
             
-            print("\n3. 도어 닫기 테스트...")
+            print("\n3. Door closing test...")
             if servo.close_door():
-                print("   ✓ 도어 닫기 성공!")
-                print(f"   현재 각도: {servo.get_current_angle()}°")
-                print(f"   도어 상태: {servo.get_door_state().value}")
+                print("   ✓ Door closing successful!")
+                print(f"   Current angle: {servo.get_current_angle()}°")
+                print(f"   Door state: {servo.get_door_state().value}")
             else:
-                print("   ✗ 도어 닫기 실패!")
+                print("   ✗ Door closing failed!")
                 return False
             
-            print("\n4. 테스트 완료!")
-            print("   ✓ 서보모터 정상 작동!")
+            print("\n4. Test completed!")
+            print("   ✓ Servo motor working normally!")
             
         return True
         
     except Exception as e:
-        print(f"   ✗ 오류 발생: {e}")
+        print(f"   ✗ Error occurred: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 def test_servo_manual_control():
-    """수동 서보 제어 테스트"""
+    """Manual servo control test"""
     print("=" * 50)
-    print("서보모터 수동 제어 테스트")
+    print("Servo Motor Manual Control Test")
     print("=" * 50)
-    print("명령어:")
-    print("  o - 도어 열기")
-    print("  c - 도어 닫기") 
-    print("  s - 상태 확인")
-    print("  t - 전체 테스트")
-    print("  q - 종료")
+    print("Commands:")
+    print("  o - Open door")
+    print("  c - Close door") 
+    print("  s - Check status")
+    print("  t - Full test")
+    print("  q - Quit")
     print("=" * 50)
     
     try:
         with ServoController() as servo:
-            print(f"초기 상태: {servo.get_door_state().value}")
+            print(f"Initial state: {servo.get_door_state().value}")
             
             while True:
-                command = input("\n명령어 입력: ").strip().lower()
+                command = input("\nEnter command: ").strip().lower()
                 
                 if command == 'q':
-                    print("테스트 종료!")
+                    print("Test terminated!")
                     break
                 elif command == 'o':
-                    print("도어 열기...")
+                    print("Opening door...")
                     if servo.open_door():
-                        print("✓ 도어 열림!")
+                        print("✓ Door opened!")
                     else:
-                        print("✗ 도어 열기 실패!")
+                        print("✗ Door opening failed!")
                 elif command == 'c':
-                    print("도어 닫기...")
+                    print("Closing door...")
                     if servo.close_door():
-                        print("✓ 도어 닫힘!")
+                        print("✓ Door closed!")
                     else:
-                        print("✗ 도어 닫기 실패!")
+                        print("✗ Door closing failed!")
                 elif command == 's':
-                    print(f"현재 상태:")
-                    print(f"  - 도어 상태: {servo.get_door_state().value}")
-                    print(f"  - 현재 각도: {servo.get_current_angle()}°")
-                    print(f"  - 도어 열림: {servo.is_door_open()}")
-                    print(f"  - 도어 닫힘: {servo.is_door_closed()}")
+                    print(f"Current status:")
+                    print(f"  - Door state: {servo.get_door_state().value}")
+                    print(f"  - Current angle: {servo.get_current_angle()}°")
+                    print(f"  - Door open: {servo.is_door_open()}")
+                    print(f"  - Door closed: {servo.is_door_closed()}")
                 elif command == 't':
-                    print("전체 움직임 테스트...")
+                    print("Running full movement test...")
                     if servo.test_movement():
-                        print("✓ 전체 테스트 성공!")
+                        print("✓ Full test successful!")
                     else:
-                        print("✗ 전체 테스트 실패!")
+                        print("✗ Full test failed!")
                 else:
-                    print("알 수 없는 명령어입니다.")
+                    print("Unknown command.")
                     
         return True
         
     except KeyboardInterrupt:
-        print("\n사용자가 테스트를 중단했습니다.")
+        print("\nTest interrupted by user.")
         return True
     except Exception as e:
-        print(f"✗ 오류: {e}")
+        print(f"✗ Error: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 def test_servo_angles():
-    """다양한 각도 테스트"""
+    """Various angle test"""
     print("=" * 50)
-    print("서보모터 각도 테스트")
+    print("Servo Motor Angle Test")
     print("=" * 50)
     
     try:
         with ServoController() as servo:
             test_angles = [0, 30, 60, 90, 120, 150, 180]
             
-            print("다양한 각도로 서보 이동 테스트...")
+            print("Testing servo movement with various angles...")
             
             for angle in test_angles:
-                print(f"  {angle}° 이동 중...")
+                print(f"  Moving to {angle}°...")
                 servo._set_angle_immediate(angle)
                 
                 import time
                 time.sleep(1)
                 
-                print(f"    현재 각도: {servo.get_current_angle()}°")
+                print(f"    Current angle: {servo.get_current_angle()}°")
             
-            print("\n원래 위치(20°)로 복귀...")
+            print("\nReturning to original position (20°)...")
             servo._set_angle_immediate(20)
             
-            print("✓ 각도 테스트 완료!")
+            print("✓ Angle test completed!")
             
         return True
         
     except Exception as e:
-        print(f"✗ 오류: {e}")
+        print(f"✗ Error: {e}")
         return False
 
 def check_gpio_setup():
-    """GPIO 설정 확인"""
+    """Check GPIO setup"""
     print("=" * 50)
-    print("GPIO 설정 확인")
+    print("GPIO Setup Check")
     print("=" * 50)
     
     try:
         import RPi.GPIO as GPIO
         
-        print("1. RPi.GPIO 라이브러리 확인... ✓")
+        print("1. RPi.GPIO library check... ✓")
         
-        print("2. GPIO 권한 확인...")
+        print("2. GPIO permission check...")
         GPIO.setmode(GPIO.BCM)
-        print("   ✓ GPIO 설정 가능!")
+        print("   ✓ GPIO setup available!")
         
-        print("3. PWM 테스트...")
+        print("3. PWM test...")
         GPIO.setup(SERVO_PIN, GPIO.OUT)
         pwm = GPIO.PWM(SERVO_PIN, 50)
         pwm.start(0)
-        print("   ✓ PWM 초기화 성공!")
+        print("   ✓ PWM initialization successful!")
         
         pwm.stop()
         GPIO.cleanup()
         
-        print("✓ GPIO 설정 모두 정상!")
+        print("✓ All GPIO setup is normal!")
         return True
         
     except Exception as e:
-        print(f"✗ GPIO 오류: {e}")
-        print("\n해결방법:")
-        print("1. sudo로 실행: sudo python servo_controller.py")
-        print("2. 사용자를 gpio 그룹에 추가: sudo usermod -a -G gpio $USER")
+        print(f"✗ GPIO error: {e}")
+        print("\nSolutions:")
+        print("1. Run with sudo: sudo python servo_controller.py")
+        print("2. Add user to gpio group: sudo usermod -a -G gpio $USER")
         return False
 
 if __name__ == "__main__":
     import sys
     
-    print("서보모터 컨트롤러 테스트 옵션:")
-    print("1. 기본 테스트 (열기/닫기)")
-    print("2. 수동 제어 테스트")
-    print("3. 각도 테스트")
-    print("4. GPIO 설정 확인")
+    print("Servo Motor Controller Test Options:")
+    print("1. Basic test (open/close)")
+    print("2. Manual control test")
+    print("3. Angle test")
+    print("4. GPIO setup check")
     
-    choice = input("선택 (1-4): ").strip()
+    choice = input("Select (1-4): ").strip()
     
     if choice == "1":
         success = test_servo_basic()
@@ -429,11 +429,11 @@ if __name__ == "__main__":
     elif choice == "4":
         success = check_gpio_setup()
     else:
-        print("잘못된 선택입니다. 기본 테스트를 실행합니다.")
+        print("Invalid selection. Running basic test.")
         success = test_servo_basic()
     
     if success:
-        print("\n🎉 테스트 성공!")
+        print("\n🎉 Test successful!")
     else:
-        print("\n❌ 테스트 실패!")
+        print("\n❌ Test failed!")
         sys.exit(1)
