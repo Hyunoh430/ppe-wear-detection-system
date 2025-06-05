@@ -96,19 +96,19 @@ def test_components(model_path: str) -> bool:
     # Test 1: Model file validation
     print("1. Testing model file...")
     if not validate_model_file(model_path):
-        print("   ✗ Model file validation failed")
+        print("   X Model file validation failed")
         success = False
     else:
-        print("   ✓ Model file validation passed")
+        print("   O Model file validation passed")
     
     # Test 2: PPE Detector
     print("2. Testing PPE detector...")
     try:
         from src.ppe_detector import PPEDetector
         detector = PPEDetector(model_path)
-        print("   ✓ PPE detector initialization successful")
+        print("   O PPE detector initialization successful")
     except Exception as e:
-        print(f"   ✗ PPE detector failed: {e}")
+        print(f"   X PPE detector failed: {e}")
         success = False
     
     # Test 3: Servo Controller
@@ -117,12 +117,12 @@ def test_components(model_path: str) -> bool:
         from src.servo_controller import ServoController
         with ServoController() as servo:
             if servo.test_movement():
-                print("   ✓ Servo controller test successful")
+                print("   O Servo controller test successful")
             else:
-                print("   ✗ Servo controller test failed")
+                print("   X Servo controller test failed")
                 success = False
     except Exception as e:
-        print(f"   ✗ Servo controller failed: {e}")
+        print(f"   X Servo controller failed: {e}")
         success = False
     
     # Test 4: Camera
@@ -139,20 +139,20 @@ def test_components(model_path: str) -> bool:
         camera.stop()
         
         if frame is not None and frame.size > 0:
-            print("   ✓ Camera test successful")
+            print("   O Camera test successful")
         else:
-            print("   ✗ Camera test failed - invalid frame")
+            print("   X Camera test failed - invalid frame")
             success = False
             
     except Exception as e:
-        print(f"   ✗ Camera test failed: {e}")
+        print(f"   X Camera test failed: {e}")
         success = False
     
     print("="*50)
     if success:
-        print("✓ ALL COMPONENT TESTS PASSED")
+        print("O ALL COMPONENT TESTS PASSED")
     else:
-        print("✗ SOME COMPONENT TESTS FAILED")
+        print("X SOME COMPONENT TESTS FAILED")
     print("="*50)
     
     return success
@@ -165,13 +165,13 @@ def main():
     if args.check_requirements:
         print_system_info()
         if check_system_requirements():
-            print("\n✓ System ready for operation")
+            print("\nO System ready for operation")
             return 0
         else:
-            print("\n✗ System requirements not met")
+            print("\nX System requirements not met")
             return 1
     
-    # Create necessary directories
+    # Create necessary directorie
     create_model_directory()
     
     # Setup logging
