@@ -234,7 +234,7 @@ def test_ppe_detector():
         # 1. Model loading test
         print("1. Model loading test...")
         detector = PPEDetector()
-        print("   ✓ Model loaded successfully!")
+        print("   o Model loaded successfully!")
         print(f"   - Input size: {detector.input_width}x{detector.input_height}")
         print(f"   - Number of classes: {len(detector.class_names)}")
         print(f"   - Class list: {detector.class_names}")
@@ -248,7 +248,7 @@ def test_ppe_detector():
         camera.configure(config)
         camera.start()
         time.sleep(2)  # Camera stabilization
-        print("   ✓ Camera initialized successfully!")
+        print("   o Camera initialized successfully!")
         
         # 3. Real-time detection test (10 seconds)
         print("\n3. Real-time PPE detection test (10 seconds)...")
@@ -280,11 +280,11 @@ def test_ppe_detector():
                     print(f"   Detected: {summary}")
                     
                     print(f"   PPE Status:")
-                    print(f"     - Mask: {'✓' if ppe_status['mask'] else '✗'}")
-                    print(f"     - Gloves: {'✓' if ppe_status['gloves'] else '✗'}")
-                    print(f"     - Goggles: {'✓' if ppe_status['goggles'] else '✗'}")
-                    print(f"     - Violations: {'✗' if ppe_status['has_violations'] else '✓'}")
-                    print(f"   Overall Compliance: {'✓ PPE Fully Worn!' if is_compliant else '✗ PPE Missing/Improper'}")
+                    print(f"     - Mask: {'o' if ppe_status['mask'] else 'X'}")
+                    print(f"     - Gloves: {'o' if ppe_status['gloves'] else 'X'}")
+                    print(f"     - Goggles: {'o' if ppe_status['goggles'] else 'X'}")
+                    print(f"     - Violations: {'X' if ppe_status['has_violations'] else 'o'}")
+                    print(f"   Overall Compliance: {'o PPE Fully Worn!' if is_compliant else 'X PPE Missing/Improper'}")
                 else:
                     print("   No PPE detected")
         
@@ -294,10 +294,10 @@ def test_ppe_detector():
         print(f"\n4. Test completed!")
         print(f"   - Total frames: {frame_count}")
         print(f"   - Average FPS: {frame_count / 10:.1f}")
-        print("   ✓ PPE detector working normally!")
+        print("   PPE detector working normally!")
         
     except Exception as e:
-        print(f"   ✗ Error occurred: {e}")
+        print(f"   Error occurred: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -312,7 +312,7 @@ def test_model_only():
     
     try:
         detector = PPEDetector()
-        print("✓ Model loaded successfully!")
+        print("o Model loaded successfully!")
         print(f"Input size: {detector.input_width}x{detector.input_height}")
         print(f"Classes: {detector.class_names}")
         
@@ -327,7 +327,7 @@ def test_model_only():
         return True
         
     except Exception as e:
-        print(f"✗ Error: {e}")
+        print(f" Error: {e}")
         return False
 
 if __name__ == "__main__":

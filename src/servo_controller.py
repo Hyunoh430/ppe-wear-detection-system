@@ -433,7 +433,7 @@ if __name__ == "__main__":
         success = test_servo_basic()
     
     if success:
-        print("\n🎉 Test successful!")
+        print("\n Test successful!")
     else:
-        print("\n❌ Test failed!")
+        print("\n Test failed!")
         sys.exit(1)

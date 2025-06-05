@@ -85,8 +85,8 @@ def print_system_info():
     print(f"Python: {platform.python_version()}")
     print(f"CPU Count: {psutil.cpu_count()}")
     print(f"Memory: {psutil.virtual_memory().total / (1024**3):.1f} GB")
-    print(f"GPIO Access: {'✓' if check_gpio_permissions() else '✗'}")
-    print(f"Camera Access: {'✓' if check_camera_permissions() else '✗'}")
+    print(f"GPIO Access: {'O' if check_gpio_permissions() else 'X'}")
+    print(f"Camera Access: {'O' if check_camera_permissions() else 'X'}")
     print("=" * 50)
 
 def signal_handler(system_instance):
@@ -233,10 +233,10 @@ def check_system_requirements():
     if issues:
         print("System Requirements Issues:")
         for issue in issues:
-            print(f"  ✗ {issue}")
+            print(f"  X {issue}")
         return False
     else:
-        print("✓ All system requirements met")
+        print("O All system requirements met")
         return True
 
 
@@ -258,7 +258,7 @@ def test_logging_system():
         logger.info("INFO level test message")
         logger.warning("WARNING level test message")
         logger.error("ERROR level test message")
-        print("   ✓ Console logging successful!")
+        print("   O Console logging successful!")
         
         # 2. File logging test
         print("\n2. File logging test...")
@@ -273,17 +273,17 @@ def test_logging_system():
             with open(log_file, 'r') as f:
                 content = f.read()
                 if "File logging test" in content:
-                    print("   ✓ File logging successful!")
+                    print("   O File logging successful!")
                 else:
-                    print("   ✗ File logging content verification failed!")
+                    print("   X File logging content verification failed!")
             os.remove(log_file)  # Clean up test file
         else:
-            print("   ✗ Log file creation failed!")
+            print("   X Log file creation failed!")
             
         return True
         
     except Exception as e:
-        print(f"   ✗ Logging test failed: {e}")
+        print(f"   X Logging test failed: {e}")
         return False
 
 def test_system_checks():
@@ -294,11 +294,11 @@ def test_system_checks():
     
     print("1. GPIO permission check...")
     gpio_ok = check_gpio_permissions()
-    print(f"   GPIO access: {'✓' if gpio_ok else '✗'}")
+    print(f"   GPIO access: {'O' if gpio_ok else 'X'}")
     
     print("\n2. Camera permission check...")
     camera_ok = check_camera_permissions()
-    print(f"   Camera access: {'✓' if camera_ok else '✗'}")
+    print(f"   Camera access: {'O' if camera_ok else 'X'}")
     
     print("\n3. System requirements check...")
     requirements_ok = check_system_requirements()
@@ -320,10 +320,10 @@ def test_model_validation():
     print(f"Default model path: {MODEL_PATH}")
     
     if validate_model_file(MODEL_PATH):
-        print("✓ Model file validation successful!")
+        print("O Model file validation successful!")
         return True
     else:
-        print("✗ Model file validation failed!")
+        print("X Model file validation failed!")
         
         # Test models directory creation
         print("\nTesting models directory creation...")
@@ -360,11 +360,11 @@ def test_performance_monitor():
         print("\nPerformance statistics:")
         monitor.print_stats()
         
-        print("✓ Performance monitor test successful!")
+        print("O Performance monitor test successful!")
         return True
         
     except Exception as e:
-        print(f"✗ Performance monitor test failed: {e}")
+        print(f"X Performance monitor test failed: {e}")
         return False
 
 def test_usage_instructions():
@@ -375,7 +375,7 @@ def test_usage_instructions():
 
 def run_all_util_tests():
     """Run all utility tests"""
-    print("🧪 RUNNING ALL UTILITY TESTS")
+    print(" RUNNING ALL UTILITY TESTS")
     print("=" * 60)
     
     tests = [
@@ -389,19 +389,19 @@ def run_all_util_tests():
     results = {}
     
     for test_name, test_func in tests:
-        print(f"\n🔍 Starting {test_name} test...")
+        print(f"\n Starting {test_name} test...")
         try:
             results[test_name] = test_func()
         except Exception as e:
-            print(f"✗ Error during {test_name} test: {e}")
+            print(f"X Error during {test_name} test: {e}")
             results[test_name] = False
     
     print("\n" + "=" * 60)
-    print("📊 TEST RESULTS SUMMARY")
+    print(" TEST RESULTS SUMMARY")
     print("=" * 60)
     
     for test_name, result in results.items():
-        status = "✓ Success" if result else "✗ Failed"
+        status = "O Success" if result else "X Failed"
         print(f"{test_name:20}: {status}")
     
     success_count = sum(results.values())
@@ -410,10 +410,10 @@ def run_all_util_tests():
     print(f"\n{success_count} out of {total_count} tests passed")
     
     if success_count == total_count:
-        print("🎉 All tests successful!")
+        print(" All tests successful!")
         return True
     else:
-        print("❌ Some tests failed!")
+        print(" Some tests failed!")
         return False
 
 if __name__ == "__main__":
@@ -446,7 +446,7 @@ if __name__ == "__main__":
         success = run_all_util_tests()
     
     if success:
-        print("\n🎉 Test successful!")
+        print("\n Test successful!")
     else:
-        print("\n❌ Test failed!")
+        print("\n Test failed!")
         sys.exit(1)

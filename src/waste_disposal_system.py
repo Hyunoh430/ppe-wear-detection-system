@@ -335,9 +335,9 @@ def test_system_initialization():
         print("1. System component initialization...")
         system = WasteDisposalSystem()
         
-        print("   ✓ PPE detector initialization complete")
-        print("   ✓ Servo controller initialization complete")
-        print("   ✓ Camera initialization complete")
+        print("   O PPE detector initialization complete")
+        print("   O Servo controller initialization complete")
+        print("   O Camera initialization complete")
         
         print("\n2. System status check...")
         stats = system.get_statistics()
@@ -346,13 +346,13 @@ def test_system_initialization():
         
         print("\n3. System cleanup...")
         system.cleanup()
-        print("   ✓ Resource cleanup complete")
+        print("   O Resource cleanup complete")
         
-        print("\n✓ System initialization test successful!")
+        print("\nO System initialization test successful!")
         return True
         
     except Exception as e:
-        print(f"✗ System initialization failed: {e}")
+        print(f"X System initialization failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -396,14 +396,14 @@ def test_system_short_run():
         
         # Final statistics
         final_stats = system.get_statistics()
-        print(f"\n📊 Final Statistics:")
+        print(f"\n Final Statistics:")
         print(f"  - Total runtime: {final_stats['runtime_seconds']:.1f} seconds")
         print(f"  - Total frames: {final_stats['total_frames']}")
         print(f"  - Average FPS: {final_stats['avg_fps']:.1f}")
         print(f"  - Detection count: {final_stats['detection_count']}")
         print(f"  - Door openings: {final_stats['door_openings']} times")
         
-        print("\n✓ Short run test successful!")
+        print("\nO Short run test successful!")
         return True
         
     except KeyboardInterrupt:
@@ -411,7 +411,7 @@ def test_system_short_run():
         system.stop()
         return True
     except Exception as e:
-        print(f"✗ Error during system execution: {e}")
+        print(f"X Error during system execution: {e}")
         import traceback
         traceback.print_exc()
         try:
@@ -441,28 +441,28 @@ def test_system_components_integration():
         print("\n2. Servo controller standalone test...")
         print("   Opening door...")
         if system.servo_controller.open_door():
-            print("   ✓ Door opening successful")
+            print("   O Door opening successful")
         
         import time
         time.sleep(2)
         
         print("   Closing door...")
         if system.servo_controller.close_door():
-            print("   ✓ Door closing successful")
+            print("   O Door closing successful")
         
         print("\n3. PPE compliance check test...")
         is_compliant, ppe_status = system.ppe_detector.check_ppe_compliance(detections)
-        print(f"   Current compliance: {'✓' if is_compliant else '✗'}")
+        print(f"   Current compliance: {'O' if is_compliant else 'X'}")
         print(f"   PPE status: {ppe_status}")
         
         print("\n4. System cleanup...")
         system.cleanup()
         
-        print("\n✓ Components integration test successful!")
+        print("\nO Components integration test successful!")
         return True
         
     except Exception as e:
-        print(f"✗ Integration test failed: {e}")
+        print(f"X Integration test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -490,15 +490,15 @@ def test_emergency_stop():
         print(f"   Door state: {door_state.value}")
         
         if door_state.value == "error":
-            print("   ✓ Emergency stop successful (ERROR state)")
+            print("   O Emergency stop successful (ERROR state)")
         else:
-            print("   ⚠ Emergency stop status needs verification")
+            print("   X Emergency stop status needs verification")
         
-        print("\n✓ Emergency stop test completed!")
+        print("\nO Emergency stop test completed!")
         return True
         
     except Exception as e:
-        print(f"✗ Emergency stop test failed: {e}")
+        print(f"X Emergency stop test failed: {e}")
         return False
 
 if __name__ == "__main__":
@@ -525,7 +525,7 @@ if __name__ == "__main__":
         success = test_system_initialization()
     
     if success:
-        print("\n🎉 Test successful!")
+        print("\n Test successful!")
     else:
-        print("\n❌ Test failed!")
+        print("\n Test failed!")
         sys.exit(1)
