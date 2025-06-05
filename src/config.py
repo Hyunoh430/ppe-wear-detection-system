@@ -26,7 +26,7 @@ REQUIRED_PPE = ["with_mask", "with_gloves", "goggles_on"]
 FORBIDDEN_PPE = ["mask_weared_incorrect", "without_mask", "without_gloves"]
 PPE_CHECK_DURATION = 3.0  # Seconds to maintain proper PPE before opening
 DOOR_OPEN_DURATION = 5.0  # Seconds to keep door open
-FPS_UPDATE_INTERVAL = 10  # Update FPS every N frames
+FPS_UPDATE_INTERVAL = 1  # Update FPS every N frames
 
 # System settings
 DEBUG_MODE = True

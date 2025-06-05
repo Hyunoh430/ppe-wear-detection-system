@@ -28,6 +28,7 @@ class WasteDisposalSystem:
         self.compliance_start_time: Optional[float] = None
         self.door_open_time: Optional[float] = None
         self.last_detection_time = 0
+        self.last_log_time = 0  # 로그 출력 시간 추가
         self.frame_count = 0
         self.fps = 0
         
@@ -114,7 +115,7 @@ class WasteDisposalSystem:
         return result
     
     def _handle_compliance_state(self, is_compliant: bool, current_time: float):
-        """Handle PPE compliance state changes (간소화된 로직)"""
+        """Handle PPE compliance state changes"""
         if is_compliant:
             # Start or continue compliance timing
             if self.compliance_start_time is None:
@@ -132,7 +133,7 @@ class WasteDisposalSystem:
                     self.door_open_time = current_time
                     self.stats['door_openings'] += 1
                     self.stats['compliance_events'] += 1
-                    # PPE 감지 성공 후 compliance_start_time 리셋하지 않음 (재감지 방지)
+                    self.logger.info("Door opened successfully!")
         else:
             # PPE 벗어도 바로 닫지 않음 - 타이머만 리셋
             if self.compliance_start_time is not None:
@@ -146,12 +147,19 @@ class WasteDisposalSystem:
             
             door_open_duration = current_time - self.door_open_time
             
+            # 문 닫힘 1초 전 경고
+            if door_open_duration >= DOOR_OPEN_DURATION - 1 and door_open_duration < DOOR_OPEN_DURATION:
+                remaining = DOOR_OPEN_DURATION - door_open_duration
+                if int(remaining * 10) % 5 == 0:  # 0.5초마다 경고
+                    self.logger.warning(f"WARNING: Door will close in {remaining:.1f} seconds")
+            
             if door_open_duration >= DOOR_OPEN_DURATION:
                 self.logger.info(f"Door open timeout ({door_open_duration:.1f}s) - closing door")
                 if self.servo_controller.close_door():
                     self.door_open_time = None
                     # 문 닫힌 후 다시 PPE 감지 가능하도록 리셋
                     self.compliance_start_time = None
+                    self.logger.info("Door closed successfully - ready for next PPE detection")
     
     def _update_fps(self, current_time: float):
         """Update FPS calculation"""
@@ -168,9 +176,15 @@ class WasteDisposalSystem:
             self.last_detection_time = current_time
     
     def _log_status(self, result: Dict[str, Any], current_time: float):
-        """Log current system status"""
+        """Log current system status with faster updates"""
         if not LOG_DETECTIONS and not DEBUG_MODE:
             return
+        
+        # 더 자주 로그 출력 (1초마다)
+        if current_time - self.last_log_time < 1.0:
+            return
+        
+        self.last_log_time = current_time
         
         status_parts = []
         
@@ -179,13 +193,15 @@ class WasteDisposalSystem:
         
         # Door state
         door_state = self.servo_controller.get_door_state().value
-        status_parts.append(f"Door: {door_state}")
+        door_symbol = "[OPEN]" if door_state == "open" else "[CLOSED]"
+        status_parts.append(f"Door: {door_symbol}")
         
         # Compliance status
         if result['is_compliant']:
             if self.compliance_start_time:
                 duration = current_time - self.compliance_start_time
-                status_parts.append(f"Compliant: {duration:.1f}s/{PPE_CHECK_DURATION}s")
+                progress = min(duration / PPE_CHECK_DURATION * 100, 100)
+                status_parts.append(f"Compliant: {duration:.1f}s/{PPE_CHECK_DURATION}s ({progress:.0f}%)")
             else:
                 status_parts.append("Compliant: Ready")
         else:
@@ -200,7 +216,8 @@ class WasteDisposalSystem:
         # Door open timer
         if self.door_open_time:
             door_duration = current_time - self.door_open_time
-            status_parts.append(f"Door open: {door_duration:.1f}s/{DOOR_OPEN_DURATION}s")
+            remaining = DOOR_OPEN_DURATION - door_duration
+            status_parts.append(f"Door closes in: {remaining:.1f}s")
         
         self.logger.info(" | ".join(status_parts))
     
@@ -210,11 +227,13 @@ class WasteDisposalSystem:
             self.is_running = True
             self.stats['start_time'] = time.time()
             self.last_detection_time = time.time()
+            self.last_log_time = time.time()
             
             self.logger.info("Starting waste disposal system main loop")
             self.logger.info(f"PPE check duration: {PPE_CHECK_DURATION}s")
             self.logger.info(f"Door open duration: {DOOR_OPEN_DURATION}s")
             self.logger.info("Press Ctrl+C to stop")
+            self.logger.info("Waiting for PPE detection...")
             
             while not self.stop_event.is_set():
                 current_time = time.time()
@@ -234,9 +253,8 @@ class WasteDisposalSystem:
                 # Update FPS
                 self._update_fps(current_time)
                 
-                # Log status
-                if self.frame_count % FPS_UPDATE_INTERVAL == 0:
-                    self._log_status(result, current_time)
+                # Log status (now every 1 second instead of every N frames)
+                self._log_status(result, current_time)
                 
                 # Small delay to prevent excessive CPU usage
                 time.sleep(0.01)
@@ -319,6 +337,9 @@ class WasteDisposalSystem:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit"""
         self.stop()
+
+
+
 
 
 # ==========================================
