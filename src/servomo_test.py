@@ -23,9 +23,9 @@ try:
     # ✅ 현재 위치를 가정 (예: 120도부터 시작)
     current_degree = 120
 
-    # 닫기 방향으로 30도 이동 (시계방향)
-    for i in range(0, 31, 1):  # 1도씩 이동, 총 30도 회전
-        target_deg = current_degree - i
+    # 닫기 방향으로 30도 이동 (시계방향 → 각도 증가)
+    for i in range(0, 31, 1):  # 1도씩 증가, 총 30도 회전
+        target_deg = current_degree + i
         print(f"이동 각도: {target_deg}")
         servo_control(target_deg)
 
