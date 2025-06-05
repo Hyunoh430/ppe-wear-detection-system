@@ -18,31 +18,31 @@ def servo_control(degree, delay=0.05):
     duty = SERVO_MIN_DUTY + (degree * (SERVO_MAX_DUTY - SERVO_MIN_DUTY) / 180.0)
     servo.ChangeDutyCycle(duty)
     time.sleep(delay)
-    
+
 try:
-    # 닫기 (20 → 130): 초반 부드럽게 → 중간/후반 빠르게
+    # ⛔ 닫기 (20° → 130°)
+    # 초반: 부드럽게
+    for deg in range(20, 61):
+        servo_control(deg, delay=0.02)
 
-    # Step 1: 20 → 60 (부드럽게)
-    for deg in np.arange(20, 60.5, 0.5):
-        servo_control(deg, delay=0.015)
-
-    # Step 2: 61 → 100 (빠르게)
+    # 중간: 빠르게 → 토크 집중 (문제 발생 구간)
     for deg in range(61, 101):
-        servo_control(deg, delay=0.015)
+        servo_control(deg, delay=0.01)  # 빠르게 밀어붙임
 
-    # Step 3: 101 → 130 (빠르게)
+    # 후반: 일반 속도
     for deg in range(101, 131):
-        servo_control(deg, delay=0.015)
+        servo_control(deg, delay=0.02)
 
     time.sleep(0.5)
 
-    # 열기 (130 → 30): 초반 부드럽게 → 중간/후반 빠르게
-    for deg in np.arange(130, 120.5, -0.5):
+    # ✅ 열기 (130° → 30°)
+    # 초반: 부드럽게 (기어 손상 방지)
+    for deg in range(130, 121, -1):
         servo_control(deg, delay=0.015)
 
-    for deg in range(120, 59, -1):
+    # 중간 + 후반: 빠르게
+    for deg in range(121, 59, -1):
         servo_control(deg, delay=0.015)
-
     for deg in range(59, 29, -1):
         servo_control(deg, delay=0.015)
 
