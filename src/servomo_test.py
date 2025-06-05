@@ -28,7 +28,7 @@ try:
 
     # Open: 120° → 30° (느리게, 더 여유 있게)
     for deg in np.arange(130, 29, -0.5):
-        servo_control(deg, delay=0.05)  # 느리게, 부드럽게
+        servo_control(deg, delay=0.03)  # 느리게, 부드럽게
 
     input("Done. Press Enter to exit...")
 
