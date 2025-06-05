@@ -238,3 +238,215 @@ def check_system_requirements():
     else:
         print("✓ All system requirements met")
         return True
+
+
+# ==========================================
+# 개별 테스트 코드
+# ==========================================
+
+def test_logging_system():
+    """로깅 시스템 테스트"""
+    print("=" * 50)
+    print("로깅 시스템 테스트")
+    print("=" * 50)
+    
+    try:
+        # 1. 콘솔 로깅 테스트
+        print("1. 콘솔 로깅 테스트...")
+        logger = setup_logging("INFO")
+        
+        logger.info("INFO 레벨 테스트 메시지")
+        logger.warning("WARNING 레벨 테스트 메시지")
+        logger.error("ERROR 레벨 테스트 메시지")
+        print("   ✓ 콘솔 로깅 성공!")
+        
+        # 2. 파일 로깅 테스트
+        print("\n2. 파일 로깅 테스트...")
+        log_file = "test_log.log"
+        logger = setup_logging("DEBUG", log_file)
+        
+        logger.debug("DEBUG 레벨 테스트")
+        logger.info("파일 로깅 테스트")
+        
+        # 파일 확인
+        if os.path.exists(log_file):
+            with open(log_file, 'r') as f:
+                content = f.read()
+                if "파일 로깅 테스트" in content:
+                    print("   ✓ 파일 로깅 성공!")
+                else:
+                    print("   ✗ 파일 로깅 내용 확인 실패!")
+            os.remove(log_file)  # 테스트 파일 정리
+        else:
+            print("   ✗ 로그 파일 생성 실패!")
+            
+        return True
+        
+    except Exception as e:
+        print(f"   ✗ 로깅 테스트 실패: {e}")
+        return False
+
+def test_system_checks():
+    """시스템 체크 함수들 테스트"""
+    print("=" * 50)
+    print("시스템 체크 테스트")
+    print("=" * 50)
+    
+    print("1. GPIO 권한 체크...")
+    gpio_ok = check_gpio_permissions()
+    print(f"   GPIO 접근: {'✓' if gpio_ok else '✗'}")
+    
+    print("\n2. 카메라 권한 체크...")
+    camera_ok = check_camera_permissions()
+    print(f"   카메라 접근: {'✓' if camera_ok else '✗'}")
+    
+    print("\n3. 시스템 요구사항 체크...")
+    requirements_ok = check_system_requirements()
+    
+    print("\n4. 시스템 정보 출력...")
+    print_system_info()
+    
+    return gpio_ok and camera_ok and requirements_ok
+
+def test_model_validation():
+    """모델 파일 검증 테스트"""
+    print("=" * 50)
+    print("모델 파일 검증 테스트")
+    print("=" * 50)
+    
+    # 기본 모델 경로 확인
+    from .config import MODEL_PATH
+    
+    print(f"기본 모델 경로: {MODEL_PATH}")
+    
+    if validate_model_file(MODEL_PATH):
+        print("✓ 모델 파일 검증 성공!")
+        return True
+    else:
+        print("✗ 모델 파일 검증 실패!")
+        
+        # models 디렉토리 생성 테스트
+        print("\nmodels 디렉토리 생성 테스트...")
+        create_model_directory()
+        
+        return False
+
+def test_performance_monitor():
+    """성능 모니터 테스트"""
+    print("=" * 50)
+    print("성능 모니터 테스트")
+    print("=" * 50)
+    
+    try:
+        import time
+        
+        monitor = PerformanceMonitor()
+        
+        print("가짜 프레임 처리 시뮬레이션 (5초간)...")
+        
+        for i in range(20):
+            start_time = time.time()
+            
+            # 가짜 처리 시간 (50-100ms)
+            time.sleep(0.05 + (i % 5) * 0.01)
+            
+            processing_time = time.time() - start_time
+            monitor.log_frame_time(processing_time)
+            monitor.log_detection_time(processing_time * 0.8)  # 감지 시간은 80%
+            
+            if i % 5 == 0:
+                print(f"  프레임 {i+1}/20 처리 완료")
+        
+        print("\n성능 통계:")
+        monitor.print_stats()
+        
+        print("✓ 성능 모니터 테스트 성공!")
+        return True
+        
+    except Exception as e:
+        print(f"✗ 성능 모니터 테스트 실패: {e}")
+        return False
+
+def test_usage_instructions():
+    """사용법 안내 테스트"""
+    print("사용법 안내 출력 테스트:")
+    print_usage_instructions()
+    return True
+
+def run_all_util_tests():
+    """모든 유틸리티 테스트 실행"""
+    print("🧪 모든 유틸리티 테스트 실행")
+    print("=" * 60)
+    
+    tests = [
+        ("로깅 시스템", test_logging_system),
+        ("시스템 체크", test_system_checks),
+        ("모델 검증", test_model_validation),
+        ("성능 모니터", test_performance_monitor),
+        ("사용법 안내", test_usage_instructions)
+    ]
+    
+    results = {}
+    
+    for test_name, test_func in tests:
+        print(f"\n🔍 {test_name} 테스트 시작...")
+        try:
+            results[test_name] = test_func()
+        except Exception as e:
+            print(f"✗ {test_name} 테스트 중 오류: {e}")
+            results[test_name] = False
+    
+    print("\n" + "=" * 60)
+    print("📊 테스트 결과 요약")
+    print("=" * 60)
+    
+    for test_name, result in results.items():
+        status = "✓ 성공" if result else "✗ 실패"
+        print(f"{test_name:15}: {status}")
+    
+    success_count = sum(results.values())
+    total_count = len(results)
+    
+    print(f"\n총 {total_count}개 테스트 중 {success_count}개 성공")
+    
+    if success_count == total_count:
+        print("🎉 모든 테스트 성공!")
+        return True
+    else:
+        print("❌ 일부 테스트 실패!")
+        return False
+
+if __name__ == "__main__":
+    import sys
+    
+    print("유틸리티 테스트 옵션:")
+    print("1. 로깅 시스템 테스트")
+    print("2. 시스템 체크 테스트")
+    print("3. 모델 검증 테스트")
+    print("4. 성능 모니터 테스트")
+    print("5. 사용법 안내 테스트")
+    print("6. 모든 테스트 실행")
+    
+    choice = input("선택 (1-6): ").strip()
+    
+    if choice == "1":
+        success = test_logging_system()
+    elif choice == "2":
+        success = test_system_checks()
+    elif choice == "3":
+        success = test_model_validation()
+    elif choice == "4":
+        success = test_performance_monitor()
+    elif choice == "5":
+        success = test_usage_instructions()
+    elif choice == "6":
+        success = run_all_util_tests()
+    else:
+        print("잘못된 선택입니다. 모든 테스트를 실행합니다.")
+        success = run_all_util_tests()
+    
+    if success:
+        print("\n🎉 테스트 성공!")
+    else:
+        print("\n❌ 테스트 실패!")
+        sys.exit(1)

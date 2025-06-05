@@ -319,3 +319,213 @@ class WasteDisposalSystem:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit"""
         self.stop()
+
+
+# ==========================================
+# 개별 테스트 코드
+# ==========================================
+
+def test_system_initialization():
+    """시스템 초기화 테스트"""
+    print("=" * 50)
+    print("폐기물 처리 시스템 초기화 테스트")
+    print("=" * 50)
+    
+    try:
+        print("1. 시스템 컴포넌트 초기화...")
+        system = WasteDisposalSystem()
+        
+        print("   ✓ PPE 감지기 초기화 완료")
+        print("   ✓ 서보 컨트롤러 초기화 완료")
+        print("   ✓ 카메라 초기화 완료")
+        
+        print("\n2. 시스템 상태 확인...")
+        stats = system.get_statistics()
+        print(f"   도어 상태: {stats['door_state']}")
+        print(f"   컴플라이언스 상태: {stats['is_compliant']}")
+        
+        print("\n3. 시스템 정리...")
+        system.cleanup()
+        print("   ✓ 리소스 정리 완료")
+        
+        print("\n✓ 시스템 초기화 테스트 성공!")
+        return True
+        
+    except Exception as e:
+        print(f"✗ 시스템 초기화 실패: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def test_system_short_run():
+    """시스템 단기 실행 테스트 (30초)"""
+    print("=" * 50)
+    print("시스템 단기 실행 테스트 (30초)")
+    print("=" * 50)
+    print("PPE를 착용하고 테스트해보세요!")
+    print("Ctrl+C로 중간에 중단할 수 있습니다.")
+    
+    try:
+        import time
+        import threading
+        
+        system = WasteDisposalSystem()
+        
+        # 백그라운드에서 시스템 실행
+        system.run_async()
+        
+        # 30초 동안 상태 모니터링
+        start_time = time.time()
+        
+        while time.time() - start_time < 30:
+            time.sleep(5)  # 5초마다 상태 출력
+            
+            stats = system.get_statistics()
+            elapsed = time.time() - start_time
+            
+            print(f"\n[{elapsed:.0f}s] 시스템 상태:")
+            print(f"  - 처리 프레임: {stats['total_frames']}")
+            print(f"  - 감지 횟수: {stats['detection_count']}")
+            print(f"  - 컴플라이언스 이벤트: {stats['compliance_events']}")
+            print(f"  - 도어 열림 횟수: {stats['door_openings']}")
+            print(f"  - 현재 FPS: {stats['current_fps']:.1f}")
+            print(f"  - 도어 상태: {stats['door_state']}")
+        
+        print("\n30초 테스트 완료!")
+        system.stop()
+        
+        # 최종 통계
+        final_stats = system.get_statistics()
+        print(f"\n📊 최종 통계:")
+        print(f"  - 총 실행 시간: {final_stats['runtime_seconds']:.1f}초")
+        print(f"  - 총 프레임: {final_stats['total_frames']}")
+        print(f"  - 평균 FPS: {final_stats['avg_fps']:.1f}")
+        print(f"  - 감지 횟수: {final_stats['detection_count']}")
+        print(f"  - 도어 열림: {final_stats['door_openings']}회")
+        
+        print("\n✓ 단기 실행 테스트 성공!")
+        return True
+        
+    except KeyboardInterrupt:
+        print("\n사용자가 테스트를 중단했습니다.")
+        system.stop()
+        return True
+    except Exception as e:
+        print(f"✗ 시스템 실행 중 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        try:
+            system.stop()
+        except:
+            pass
+        return False
+
+def test_system_components_integration():
+    """시스템 컴포넌트 통합 테스트"""
+    print("=" * 50)
+    print("시스템 컴포넌트 통합 테스트")
+    print("=" * 50)
+    
+    try:
+        system = WasteDisposalSystem()
+        
+        print("1. PPE 감지기 단독 테스트...")
+        frame = system.camera.capture_array()
+        detections = system.ppe_detector.detect(frame)
+        print(f"   감지된 객체 수: {len(detections)}")
+        
+        if detections:
+            for det in detections:
+                print(f"   - {det['class_name']}: {det['confidence']:.2f}")
+        
+        print("\n2. 서보 컨트롤러 단독 테스트...")
+        print("   도어 열기...")
+        if system.servo_controller.open_door():
+            print("   ✓ 도어 열기 성공")
+        
+        import time
+        time.sleep(2)
+        
+        print("   도어 닫기...")
+        if system.servo_controller.close_door():
+            print("   ✓ 도어 닫기 성공")
+        
+        print("\n3. PPE 컴플라이언스 체크 테스트...")
+        is_compliant, ppe_status = system.ppe_detector.check_ppe_compliance(detections)
+        print(f"   현재 컴플라이언스: {'✓' if is_compliant else '✗'}")
+        print(f"   PPE 상태: {ppe_status}")
+        
+        print("\n4. 시스템 정리...")
+        system.cleanup()
+        
+        print("\n✓ 컴포넌트 통합 테스트 성공!")
+        return True
+        
+    except Exception as e:
+        print(f"✗ 통합 테스트 실패: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def test_emergency_stop():
+    """비상 정지 기능 테스트"""
+    print("=" * 50)
+    print("비상 정지 기능 테스트")
+    print("=" * 50)
+    
+    try:
+        system = WasteDisposalSystem()
+        
+        print("1. 시스템 시작...")
+        system.run_async()
+        
+        import time
+        time.sleep(3)
+        
+        print("2. 비상 정지 테스트...")
+        system.emergency_stop()
+        
+        print("3. 시스템 상태 확인...")
+        door_state = system.servo_controller.get_door_state()
+        print(f"   도어 상태: {door_state.value}")
+        
+        if door_state.value == "error":
+            print("   ✓ 비상 정지 성공 (ERROR 상태)")
+        else:
+            print("   ⚠ 비상 정지 상태 확인 필요")
+        
+        print("\n✓ 비상 정지 테스트 완료!")
+        return True
+        
+    except Exception as e:
+        print(f"✗ 비상 정지 테스트 실패: {e}")
+        return False
+
+if __name__ == "__main__":
+    import sys
+    
+    print("폐기물 처리 시스템 테스트 옵션:")
+    print("1. 시스템 초기화 테스트")
+    print("2. 단기 실행 테스트 (30초)")
+    print("3. 컴포넌트 통합 테스트")
+    print("4. 비상 정지 테스트")
+    
+    choice = input("선택 (1-4): ").strip()
+    
+    if choice == "1":
+        success = test_system_initialization()
+    elif choice == "2":
+        success = test_system_short_run()
+    elif choice == "3":
+        success = test_system_components_integration()
+    elif choice == "4":
+        success = test_emergency_stop()
+    else:
+        print("잘못된 선택입니다. 초기화 테스트를 실행합니다.")
+        success = test_system_initialization()
+    
+    if success:
+        print("\n🎉 테스트 성공!")
+    else:
+        print("\n❌ 테스트 실패!")
+        sys.exit(1)

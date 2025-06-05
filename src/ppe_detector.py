@@ -215,3 +215,134 @@ class PPEDetector:
             summary.append(f"{det['class_name']}({det['confidence']:.2f})")
         
         return ", ".join(summary)
+
+
+# ==========================================
+# 개별 테스트 코드
+# ==========================================
+
+def test_ppe_detector():
+    """PPE 감지기 개별 테스트"""
+    import time
+    from picamera2 import Picamera2
+    
+    print("=" * 50)
+    print("PPE DETECTOR 개별 테스트")
+    print("=" * 50)
+    
+    try:
+        # 1. 모델 로드 테스트
+        print("1. 모델 로드 테스트...")
+        detector = PPEDetector()
+        print("   ✓ 모델 로드 성공!")
+        print(f"   - 입력 크기: {detector.input_width}x{detector.input_height}")
+        print(f"   - 클래스 수: {len(detector.class_names)}")
+        print(f"   - 클래스 목록: {detector.class_names}")
+        
+        # 2. 카메라 초기화
+        print("\n2. 카메라 초기화...")
+        camera = Picamera2()
+        config = camera.create_preview_configuration(
+            main={"size": (640, 480), "format": "RGB888"}
+        )
+        camera.configure(config)
+        camera.start()
+        time.sleep(2)  # 카메라 안정화
+        print("   ✓ 카메라 초기화 성공!")
+        
+        # 3. 실시간 감지 테스트 (10초간)
+        print("\n3. 실시간 PPE 감지 테스트 (10초간)...")
+        print("   다양한 PPE를 착용하고 테스트해보세요!")
+        
+        start_time = time.time()
+        frame_count = 0
+        
+        while time.time() - start_time < 10:
+            # 프레임 캡처
+            frame = camera.capture_array()
+            frame_count += 1
+            
+            # PPE 감지
+            detections = detector.detect(frame)
+            
+            # 준수 상태 체크
+            is_compliant, ppe_status = detector.check_ppe_compliance(detections)
+            
+            # 결과 출력 (1초마다)
+            if frame_count % 10 == 0:
+                elapsed = time.time() - start_time
+                fps = frame_count / elapsed
+                
+                print(f"\n   [{elapsed:.1f}s] FPS: {fps:.1f}")
+                
+                if detections:
+                    summary = detector.get_detection_summary(detections)
+                    print(f"   감지됨: {summary}")
+                    
+                    print(f"   PPE 상태:")
+                    print(f"     - 마스크: {'✓' if ppe_status['mask'] else '✗'}")
+                    print(f"     - 장갑: {'✓' if ppe_status['gloves'] else '✗'}")
+                    print(f"     - 고글: {'✓' if ppe_status['goggles'] else '✗'}")
+                    print(f"     - 위반사항: {'✗' if ppe_status['has_violations'] else '✓'}")
+                    print(f"   전체 준수: {'✓ PPE 완전 착용!' if is_compliant else '✗ PPE 미착용/부적절'}")
+                else:
+                    print("   감지된 PPE 없음")
+        
+        camera.stop()
+        
+        # 4. 테스트 완료
+        print(f"\n4. 테스트 완료!")
+        print(f"   - 총 프레임: {frame_count}")
+        print(f"   - 평균 FPS: {frame_count / 10:.1f}")
+        print("   ✓ PPE 감지기 정상 작동!")
+        
+    except Exception as e:
+        print(f"   ✗ 오류 발생: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+    
+    return True
+
+def test_model_only():
+    """모델 로드만 테스트 (카메라 없이)"""
+    print("=" * 50)
+    print("모델 로드 테스트 (카메라 없이)")
+    print("=" * 50)
+    
+    try:
+        detector = PPEDetector()
+        print("✓ 모델 로드 성공!")
+        print(f"입력 크기: {detector.input_width}x{detector.input_height}")
+        print(f"클래스: {detector.class_names}")
+        
+        # 더미 이미지로 추론 테스트
+        import numpy as np
+        dummy_image = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
+        
+        print("\n더미 이미지로 추론 테스트...")
+        detections = detector.detect(dummy_image)
+        print(f"결과: {len(detections)}개 객체 감지")
+        
+        return True
+        
+    except Exception as e:
+        print(f"✗ 오류: {e}")
+        return False
+
+if __name__ == "__main__":
+    import sys
+    
+    print("PPE Detector 테스트 옵션:")
+    print("1. 전체 테스트 (카메라 포함)")
+    print("2. 모델만 테스트 (카메라 없이)")
+    
+    choice = input("선택 (1 또는 2): ").strip()
+    
+    if choice == "1":
+        test_ppe_detector()
+    elif choice == "2":
+        test_model_only()
+    else:
+        print("잘못된 선택입니다. 모델만 테스트합니다.")
+        test_model_only()
