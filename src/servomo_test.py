@@ -23,7 +23,7 @@ def servo_control(degree, delay=1.5):
 try:
     # Move servo to 30 degrees (opposite of 150)
     print("Moving servo to 30 degrees...")
-    servo_control(30)
+    servo_control(20)
 
 except KeyboardInterrupt:
     pass
