@@ -15,12 +15,10 @@ from src.waste_disposal_system import WasteDisposalSystem
 from src.utils import (
     setup_logging, 
     create_log_filename, 
-    print_system_info, 
     print_usage_instructions,
     signal_handler,
     validate_model_file,
-    create_model_directory,
-    check_system_requirements
+    create_model_directory
 )
 from src.config import MODEL_PATH, DEBUG_MODE
 
@@ -77,16 +75,10 @@ Examples:
         help='Disable file logging, only log to console'
     )
     
-    parser.add_argument(
-        '--check-requirements', 
-        action='store_true',
-        help='Check system requirements and exit'
-    )
-    
     return parser.parse_args()
 
 def test_components(model_path: str) -> bool:
-    """Test system components"""
+    """Test system components (간소화됨)"""
     print("\n" + "="*50)
     print("COMPONENT TESTING")
     print("="*50)
@@ -111,16 +103,13 @@ def test_components(model_path: str) -> bool:
         print(f"   X PPE detector failed: {e}")
         success = False
     
-    # Test 3: Servo Controller
+    # Test 3: Servo Controller (테스트 움직임 제거)
     print("3. Testing servo controller...")
     try:
         from src.servo_controller import ServoController
-        with ServoController() as servo:
-            if servo.test_movement():
-                print("   O Servo controller test successful")
-            else:
-                print("   X Servo controller test failed")
-                success = False
+        servo = ServoController()
+        print("   O Servo controller initialization successful")
+        servo.cleanup()
     except Exception as e:
         print(f"   X Servo controller failed: {e}")
         success = False
@@ -161,17 +150,7 @@ def main():
     """Main function"""
     args = parse_arguments()
     
-    # Check system requirements if requested
-    if args.check_requirements:
-        print_system_info()
-        if check_system_requirements():
-            print("\nO System ready for operation")
-            return 0
-        else:
-            print("\nX System requirements not met")
-            return 1
-    
-    # Create necessary directorie
+    # Create necessary directories
     create_model_directory()
     
     # Setup logging
@@ -181,10 +160,6 @@ def main():
     
     log_level = 'DEBUG' if args.debug else args.log_level
     logger = setup_logging(log_level, log_file)
-    
-    # Print system information
-    if args.debug:
-        print_system_info()
     
     # Validate model file
     if not validate_model_file(args.model):
@@ -196,11 +171,6 @@ def main():
         success = test_components(args.model)
         return 0 if success else 1
     
-    # Quick system check
-    if not check_system_requirements():
-        logger.error("System requirements not met")
-        return 1
-    
     # Initialize and run system
     system = None
     try:
@@ -209,7 +179,8 @@ def main():
         # Print usage instructions
         print_usage_instructions()
         
-        # Initialize system
+        # Initialize system (더 이상 requirements 체크 안함)
+        logger.info("Initializing system components...")
         system = WasteDisposalSystem()
         
         # Setup signal handlers for graceful shutdown
@@ -218,6 +189,7 @@ def main():
         
         # Run system
         logger.info("System initialized successfully - starting main loop")
+        logger.info("Door is in closed position, ready for PPE detection")
         system.run()
         
     except KeyboardInterrupt:

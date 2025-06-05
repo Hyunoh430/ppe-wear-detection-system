@@ -40,8 +40,8 @@ class ServoController:
             self.servo = GPIO.PWM(self.pin, SERVO_FREQUENCY)
             self.servo.start(0)
             
-            # Set initial position (closed)
-            self._set_angle_immediate(SERVO_CLOSED_ANGLE)
+            # Set initial position (closed) and stop PWM
+            self._set_angle_and_stop(SERVO_CLOSED_ANGLE)
             
             self.is_initialized = True
             self.logger.info(f"Servo controller initialized on GPIO pin {self.pin}")
@@ -61,24 +61,35 @@ class ServoController:
         duty = SERVO_MIN_DUTY + (angle * (SERVO_MAX_DUTY - SERVO_MIN_DUTY) / 180.0)
         return duty
     
-    def _set_angle_immediate(self, angle: float):
-        """Set servo to specific angle immediately"""
+    def _set_angle_and_stop(self, angle: float, hold_time: float = 0.5):
+        """Set servo to specific angle and stop PWM signal"""
         if not self.is_initialized or self.servo is None:
             self.logger.error("Servo not initialized")
             return False
         
         try:
             duty = self._calculate_duty_cycle(angle)
+            
+            # Send PWM signal to move servo
             self.servo.ChangeDutyCycle(duty)
+            
+            # Hold position for specified time to ensure movement completion
+            time.sleep(hold_time)
+            
+            # Stop PWM signal to prevent continuous rotation
+            self.servo.ChangeDutyCycle(0)
+            
             self.current_angle = angle
-            time.sleep(SERVO_MOVE_DELAY)
+            self.logger.debug(f"Servo moved to {angle}° and PWM stopped")
+            
             return True
+            
         except Exception as e:
             self.logger.error(f"Failed to set servo angle: {e}")
             self.state = DoorState.ERROR
             return False
     
-    def _move_to_angle_smooth(self, target_angle: float, speed: int = 1):
+    def _move_to_angle_smooth(self, target_angle: float, speed: int = 2):
         """Move servo smoothly to target angle"""
         if not self.is_initialized:
             return False
@@ -86,6 +97,10 @@ class ServoController:
         self.state = DoorState.MOVING
         current = int(self.current_angle)
         target = int(target_angle)
+        
+        if current == target:
+            self.logger.debug(f"Already at target angle {target}°")
+            return True
         
         if current < target:
             step = speed
@@ -95,12 +110,14 @@ class ServoController:
             angle_range = range(current, target - 1, step)
         
         try:
-            for angle in angle_range:
-                if not self._set_angle_immediate(angle):
-                    return False
-                
-            # Ensure we reach exact target
-            self._set_angle_immediate(target_angle)
+            # Move through intermediate angles quickly
+            for angle in angle_range[:-1]:  # Exclude last angle
+                duty = self._calculate_duty_cycle(angle)
+                self.servo.ChangeDutyCycle(duty)
+                time.sleep(SERVO_MOVE_DELAY)
+            
+            # Final position with longer hold and PWM stop
+            self._set_angle_and_stop(target_angle, hold_time=0.8)
             self.target_angle = target_angle
             
             return True
@@ -126,11 +143,11 @@ class ServoController:
             if smooth:
                 success = self._move_to_angle_smooth(SERVO_OPEN_ANGLE)
             else:
-                success = self._set_angle_immediate(SERVO_OPEN_ANGLE)
+                success = self._set_angle_and_stop(SERVO_OPEN_ANGLE)
             
             if success:
                 self.state = DoorState.OPEN
-                self.logger.info("Door opened successfully")
+                self.logger.info(f"Door opened successfully (angle: {self.current_angle}°)")
             else:
                 self.logger.error("Failed to open door")
                 self.state = DoorState.ERROR
@@ -153,11 +170,11 @@ class ServoController:
             if smooth:
                 success = self._move_to_angle_smooth(SERVO_CLOSED_ANGLE)
             else:
-                success = self._set_angle_immediate(SERVO_CLOSED_ANGLE)
+                success = self._set_angle_and_stop(SERVO_CLOSED_ANGLE)
             
             if success:
                 self.state = DoorState.CLOSED
-                self.logger.info("Door closed successfully")
+                self.logger.info(f"Door closed successfully (angle: {self.current_angle}°)")
             else:
                 self.logger.error("Failed to close door")
                 self.state = DoorState.ERROR
@@ -191,7 +208,7 @@ class ServoController:
         return self.state == DoorState.CLOSED
     
     def test_movement(self) -> bool:
-        """Test servo movement - open and close cycle"""
+        """Test servo movement - open and close cycle (테스트용으로만 사용)"""
         self.logger.info("Testing servo movement...")
         
         try:
@@ -199,7 +216,7 @@ class ServoController:
             if not self.open_door():
                 return False
             
-            time.sleep(1)
+            time.sleep(2)
             
             # Test closing
             if not self.close_door():
@@ -216,6 +233,8 @@ class ServoController:
         """Clean up GPIO resources"""
         try:
             if self.servo:
+                # Stop PWM before cleanup
+                self.servo.ChangeDutyCycle(0)
                 self.servo.stop()
             GPIO.cleanup()
             self.is_initialized = False
@@ -357,15 +376,15 @@ def test_servo_angles():
             
             for angle in test_angles:
                 print(f"  Moving to {angle}°...")
-                servo._set_angle_immediate(angle)
+                servo._set_angle_and_stop(angle)
                 
                 import time
-                time.sleep(1)
+                time.sleep(2)  # 더 긴 대기 시간
                 
                 print(f"    Current angle: {servo.get_current_angle()}°")
             
-            print("\nReturning to original position (20°)...")
-            servo._set_angle_immediate(20)
+            print("\nReturning to original position (120°)...")
+            servo._set_angle_and_stop(120)  # 수정: 닫힌 위치로 복귀
             
             print("O Angle test completed!")
             

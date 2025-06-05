@@ -17,8 +17,8 @@ SERVO_PIN = 2  # BCM GPIO pin
 SERVO_FREQUENCY = 50  # Hz
 SERVO_MIN_DUTY = 3
 SERVO_MAX_DUTY = 12
-SERVO_CLOSED_ANGLE = 20   # Door closed position
-SERVO_OPEN_ANGLE = 120    # Door open position
+SERVO_CLOSED_ANGLE = 120   # Door closed position (수정: 120도가 닫힌 상태)
+SERVO_OPEN_ANGLE = 20      # Door open position (수정: 20도가 열린 상태)
 SERVO_MOVE_DELAY = 0.01   # Delay between angle steps
 
 # PPE detection settings
@@ -26,7 +26,7 @@ REQUIRED_PPE = ["with_mask", "with_gloves", "goggles_on"]
 FORBIDDEN_PPE = ["mask_weared_incorrect", "without_mask", "without_gloves"]
 PPE_CHECK_DURATION = 3.0  # Seconds to maintain proper PPE before opening
 DOOR_OPEN_DURATION = 5.0  # Seconds to keep door open
-FPS_UPDATE_INTERVAL = 10  # Update FPS every N frames
+FPS_UPDATE_INTERVAL = 1  # Update FPS every N frames
 
 # System settings
 DEBUG_MODE = True
