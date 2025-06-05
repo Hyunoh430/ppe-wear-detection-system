@@ -33,14 +33,22 @@ try:
     time.sleep(0.5)
 
    
+   # Step 1: 펀치 (130 → 120, 매우 빠르게)
+    for deg in range(130, 119, -1):
+        servo_control(deg, delay=0.005)
 
-    # 열기 (130 → 30): 느 → 빠 → 빠
-    for deg in range(130, 99, -1):
+    # Step 2: 느리게 (120 → 100)
+    for deg in range(120, 99, -1):
         servo_control(deg, delay=0.04)
+
+    # Step 3: 빠르게 (99 → 60)
     for deg in range(99, 59, -1):
         servo_control(deg, delay=0.015)
+
+    # Step 4: 빠르게 (59 → 30)
     for deg in range(59, 29, -1):
         servo_control(deg, delay=0.015)
+
     input("Done. Press Enter to exit...")
 
 except KeyboardInterrupt:
