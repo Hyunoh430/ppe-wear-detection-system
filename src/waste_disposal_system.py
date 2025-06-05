@@ -9,9 +9,9 @@ from typing import Optional, Dict, Any
 from picamera2 import Picamera2
 import numpy as np
 
-from .config import *
-from .ppe_detector import PPEDetector
-from .servo_controller import ServoController, DoorState
+from config import *
+from ppe_detector import PPEDetector
+from servo_controller import ServoController, DoorState
 
 class WasteDisposalSystem:
     def __init__(self):

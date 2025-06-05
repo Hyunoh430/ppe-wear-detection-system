@@ -9,7 +9,7 @@ import tensorflow as tf
 from typing import List, Dict, Tuple
 import logging
 
-from .config import *
+from config import *
 
 class PPEDetector:
     def __init__(self, model_path: str = MODEL_PATH):

@@ -9,7 +9,7 @@ import logging
 from typing import Optional
 from enum import Enum
 
-from .config import *
+from config import *
 
 class DoorState(Enum):
     CLOSED = "closed"
@@ -245,17 +245,17 @@ def test_servo_basic():
     try:
         print("1. Servo controller initialization...")
         with ServoController() as servo:
-            print("   ✓ Initialization successful!")
+            print("   O Initialization successful!")
             print(f"   Current angle: {servo.get_current_angle()}°")
             print(f"   Door state: {servo.get_door_state().value}")
             
             print("\n2. Door opening test...")
             if servo.open_door():
-                print("   ✓ Door opening successful!")
+                print("   O Door opening successful!")
                 print(f"   Current angle: {servo.get_current_angle()}°")
                 print(f"   Door state: {servo.get_door_state().value}")
             else:
-                print("   ✗ Door opening failed!")
+                print("   X Door opening failed!")
                 return False
             
             import time
@@ -264,20 +264,20 @@ def test_servo_basic():
             
             print("\n3. Door closing test...")
             if servo.close_door():
-                print("   ✓ Door closing successful!")
+                print("   O Door closing successful!")
                 print(f"   Current angle: {servo.get_current_angle()}°")
                 print(f"   Door state: {servo.get_door_state().value}")
             else:
-                print("   ✗ Door closing failed!")
+                print("   X Door closing failed!")
                 return False
             
             print("\n4. Test completed!")
-            print("   ✓ Servo motor working normally!")
+            print("   O Servo motor working normally!")
             
         return True
         
     except Exception as e:
-        print(f"   ✗ Error occurred: {e}")
+        print(f"   X Error occurred: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -308,15 +308,15 @@ def test_servo_manual_control():
                 elif command == 'o':
                     print("Opening door...")
                     if servo.open_door():
-                        print("✓ Door opened!")
+                        print("O Door opened!")
                     else:
-                        print("✗ Door opening failed!")
+                        print("X Door opening failed!")
                 elif command == 'c':
                     print("Closing door...")
                     if servo.close_door():
-                        print("✓ Door closed!")
+                        print("O Door closed!")
                     else:
-                        print("✗ Door closing failed!")
+                        print("X Door closing failed!")
                 elif command == 's':
                     print(f"Current status:")
                     print(f"  - Door state: {servo.get_door_state().value}")
@@ -326,9 +326,9 @@ def test_servo_manual_control():
                 elif command == 't':
                     print("Running full movement test...")
                     if servo.test_movement():
-                        print("✓ Full test successful!")
+                        print("O Full test successful!")
                     else:
-                        print("✗ Full test failed!")
+                        print("X Full test failed!")
                 else:
                     print("Unknown command.")
                     
@@ -338,7 +338,7 @@ def test_servo_manual_control():
         print("\nTest interrupted by user.")
         return True
     except Exception as e:
-        print(f"✗ Error: {e}")
+        print(f"X Error: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -367,12 +367,12 @@ def test_servo_angles():
             print("\nReturning to original position (20°)...")
             servo._set_angle_immediate(20)
             
-            print("✓ Angle test completed!")
+            print("O Angle test completed!")
             
         return True
         
     except Exception as e:
-        print(f"✗ Error: {e}")
+        print(f"X Error: {e}")
         return False
 
 def check_gpio_setup():
@@ -384,26 +384,26 @@ def check_gpio_setup():
     try:
         import RPi.GPIO as GPIO
         
-        print("1. RPi.GPIO library check... ✓")
+        print("1. RPi.GPIO library check... O")
         
         print("2. GPIO permission check...")
         GPIO.setmode(GPIO.BCM)
-        print("   ✓ GPIO setup available!")
+        print("   O GPIO setup available!")
         
         print("3. PWM test...")
         GPIO.setup(SERVO_PIN, GPIO.OUT)
         pwm = GPIO.PWM(SERVO_PIN, 50)
         pwm.start(0)
-        print("   ✓ PWM initialization successful!")
+        print("   O PWM initialization successful!")
         
         pwm.stop()
         GPIO.cleanup()
         
-        print("✓ All GPIO setup is normal!")
+        print("O All GPIO setup is normal!")
         return True
         
     except Exception as e:
-        print(f"✗ GPIO error: {e}")
+        print(f"X GPIO error: {e}")
         print("\nSolutions:")
         print("1. Run with sudo: sudo python servo_controller.py")
         print("2. Add user to gpio group: sudo usermod -a -G gpio $USER")

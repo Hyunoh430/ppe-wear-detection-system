@@ -315,7 +315,7 @@ def test_model_validation():
     print("=" * 50)
     
     # Check default model path
-    from .config import MODEL_PATH
+    from config import MODEL_PATH
     
     print(f"Default model path: {MODEL_PATH}")
     

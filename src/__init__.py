@@ -17,11 +17,11 @@ Version: 1.0.0
 __version__ = "1.0.0"
 __author__ = "PPE Safety Team"
 
-from .ppe_detector import PPEDetector
-from .servo_controller import ServoController, DoorState
-from .waste_disposal_system import WasteDisposalSystem
-from . import config
-from . import utils
+from ppe_detector import PPEDetector
+from servo_controller import ServoController, DoorState
+from waste_disposal_system import WasteDisposalSystem
+import config
+import utils
 
 __all__ = [
     'PPEDetector',
