@@ -11,7 +11,7 @@ GPIO.setup(servoPin, GPIO.OUT)
 servo = GPIO.PWM(servoPin, 50)
 servo.start(0)
 
-# 각도 → 듀티비로 변환
+# 각도 → 듀티비 변환
 def servo_control(degree):
     if degree > 180: degree = 180
     if degree < 0: degree = 0
@@ -20,13 +20,13 @@ def servo_control(degree):
     time.sleep(0.1)
 
 try:
-    # ✅ 현재 위치를 가정 (예: 120도부터 시작)
+    # 현재 위치를 예: 120도로 가정
     current_degree = 120
 
-    # 닫기 방향으로 30도 이동 (시계방향 → 각도 증가)
-    for i in range(0, 31, 1):  # 1도씩 증가, 총 30도 회전
-        target_deg = current_degree + i
-        print(f"이동 각도: {target_deg}")
+    # 시계방향으로 닫기 (→ 각도 감소)
+    for i in range(0, 31, 1):  # 1도씩 줄이기
+        target_deg = current_degree - i
+        print(f"닫기 동작: {target_deg}도")
         servo_control(target_deg)
 
 except KeyboardInterrupt:
