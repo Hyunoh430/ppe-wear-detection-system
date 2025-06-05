@@ -19,7 +19,7 @@ SERVO_MIN_DUTY = 3
 SERVO_MAX_DUTY = 12
 SERVO_CLOSED_ANGLE = 20   # Door closed position
 SERVO_OPEN_ANGLE = 120    # Door open position
-SERVO_MOVE_DELAY = 0.03   # Delay between angle steps
+SERVO_MOVE_DELAY = 0.1   # Delay between angle steps
 
 # PPE detection settings
 REQUIRED_PPE = ["with_mask", "with_gloves", "goggles_on"]
