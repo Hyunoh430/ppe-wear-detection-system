@@ -32,12 +32,18 @@ try:
 
     time.sleep(0.5)
 
-    # 열기: 130 → 30 (균일하게)
-    for deg in range(130, 29, -1):
-        servo_control(deg, delay=0.03)
+   
+
+    # 열기 (130 → 30): 빠 → 느 → 빠
+    for deg in range(130, 99, -1):
+        servo_control(deg, delay=0.015)
+    for deg in range(99, 59, -1):
+        servo_control(deg, delay=0.04)
+    for deg in range(59, 29, -1):
+        servo_control(deg, delay=0.015)
 
     input("Done. Press Enter to exit...")
-    
+
 except KeyboardInterrupt:
     pass
 
