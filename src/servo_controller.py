@@ -40,7 +40,7 @@ class ServoController:
             self.servo = GPIO.PWM(self.pin, SERVO_FREQUENCY)
             self.servo.start(0)
             
-            # Set initial position (closed)
+            # Set initial position (closed) - 테스트 움직임 제거
             self._set_angle_immediate(SERVO_CLOSED_ANGLE)
             
             self.is_initialized = True
@@ -191,7 +191,7 @@ class ServoController:
         return self.state == DoorState.CLOSED
     
     def test_movement(self) -> bool:
-        """Test servo movement - open and close cycle"""
+        """Test servo movement - open and close cycle (테스트용으로만 사용)"""
         self.logger.info("Testing servo movement...")
         
         try:
@@ -364,8 +364,8 @@ def test_servo_angles():
                 
                 print(f"    Current angle: {servo.get_current_angle()}°")
             
-            print("\nReturning to original position (20°)...")
-            servo._set_angle_immediate(20)
+            print("\nReturning to original position (120°)...")
+            servo._set_angle_immediate(120)  # 수정: 닫힌 위치로 복귀
             
             print("O Angle test completed!")
             

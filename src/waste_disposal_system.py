@@ -23,7 +23,7 @@ class WasteDisposalSystem:
         self.servo_controller: Optional[ServoController] = None
         self.camera: Optional[Picamera2] = None
         
-        # State tracking
+        # State tracking (간소화된 로직)
         self.is_running = False
         self.compliance_start_time: Optional[float] = None
         self.door_open_time: Optional[float] = None
@@ -56,7 +56,7 @@ class WasteDisposalSystem:
             self.ppe_detector = PPEDetector()
             self.logger.info("PPE detector initialized")
             
-            # Initialize servo controller
+            # Initialize servo controller (테스트 움직임 제거)
             self.servo_controller = ServoController()
             self.logger.info("Servo controller initialized")
             
@@ -64,11 +64,8 @@ class WasteDisposalSystem:
             self._initialize_camera()
             self.logger.info("Camera initialized")
             
-            # Test servo movement
-            if not self.servo_controller.test_movement():
-                raise Exception("Servo test failed")
-            
-            self.logger.info("Waste disposal system initialized successfully")
+            # 초기화 시 테스트 움직임 제거
+            self.logger.info("Waste disposal system initialized successfully - door in closed position")
             
         except Exception as e:
             self.logger.error(f"System initialization failed: {e}")
@@ -117,7 +114,7 @@ class WasteDisposalSystem:
         return result
     
     def _handle_compliance_state(self, is_compliant: bool, current_time: float):
-        """Handle PPE compliance state changes"""
+        """Handle PPE compliance state changes (간소화된 로직)"""
         if is_compliant:
             # Start or continue compliance timing
             if self.compliance_start_time is None:
@@ -126,7 +123,7 @@ class WasteDisposalSystem:
             
             compliance_duration = current_time - self.compliance_start_time
             
-            # Check if compliance duration threshold is met
+            # Check if compliance duration threshold is met and door is closed
             if (compliance_duration >= PPE_CHECK_DURATION and 
                 self.servo_controller.is_door_closed()):
                 
@@ -135,10 +132,11 @@ class WasteDisposalSystem:
                     self.door_open_time = current_time
                     self.stats['door_openings'] += 1
                     self.stats['compliance_events'] += 1
+                    # PPE 감지 성공 후 compliance_start_time 리셋하지 않음 (재감지 방지)
         else:
-            # Reset compliance timing
+            # PPE 벗어도 바로 닫지 않음 - 타이머만 리셋
             if self.compliance_start_time is not None:
-                self.logger.info("PPE compliance lost - resetting timer")
+                self.logger.info("PPE compliance lost - resetting timer (door remains open if opened)")
                 self.compliance_start_time = None
     
     def _handle_door_timeout(self, current_time: float):
@@ -152,6 +150,8 @@ class WasteDisposalSystem:
                 self.logger.info(f"Door open timeout ({door_open_duration:.1f}s) - closing door")
                 if self.servo_controller.close_door():
                     self.door_open_time = None
+                    # 문 닫힌 후 다시 PPE 감지 가능하도록 리셋
+                    self.compliance_start_time = None
     
     def _update_fps(self, current_time: float):
         """Update FPS calculation"""
@@ -187,7 +187,7 @@ class WasteDisposalSystem:
                 duration = current_time - self.compliance_start_time
                 status_parts.append(f"Compliant: {duration:.1f}s/{PPE_CHECK_DURATION}s")
             else:
-                status_parts.append("Compliant: Starting")
+                status_parts.append("Compliant: Ready")
         else:
             status_parts.append("Non-compliant")
         

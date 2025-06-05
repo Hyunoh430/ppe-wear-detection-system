@@ -17,8 +17,8 @@ SERVO_PIN = 2  # BCM GPIO pin
 SERVO_FREQUENCY = 50  # Hz
 SERVO_MIN_DUTY = 3
 SERVO_MAX_DUTY = 12
-SERVO_CLOSED_ANGLE = 20   # Door closed position
-SERVO_OPEN_ANGLE = 120    # Door open position
+SERVO_CLOSED_ANGLE = 120   # Door closed position (수정: 120도가 닫힌 상태)
+SERVO_OPEN_ANGLE = 20      # Door open position (수정: 20도가 열린 상태)
 SERVO_MOVE_DELAY = 0.01   # Delay between angle steps
 
 # PPE detection settings
