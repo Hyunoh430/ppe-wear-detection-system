@@ -87,7 +87,7 @@ Ensure the following packages are included:
 ## ▶️ Run the System
 
 ```bash
-python src/main.py
+python src/main_tflite_raspberry.py
 ```
 
 ---
