@@ -24,7 +24,7 @@ def servo_control(degree, delay=0.01):
 try:
     # Open: 100 → 50 (fast)
     for deg in range(100, 49, -1):
-        servo_control(deg, delay=0.008)
+        servo_control(deg, delay=0.02)
 
     # Hold at 50 degrees for 2 seconds (motor holds position)
     hold_duty = SERVO_MIN_DUTY + (50 * (SERVO_MAX_DUTY - SERVO_MIN_DUTY) / 180.0)
