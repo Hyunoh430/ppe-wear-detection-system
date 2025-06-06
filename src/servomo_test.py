@@ -22,17 +22,17 @@ def servo_control(degree, delay=0.01):
     time.sleep(delay)
 
 try:
-    # Open: 100 → 40 (fast)
-    for deg in range(100, 39, -1):
+    # Open: 100 → 45 (fast)
+    for deg in range(100, 44, -1):
         servo_control(deg, delay=0.005)
 
-    # Hold at 40 degrees for 2 seconds (motor holds position)
-    hold_duty = SERVO_MIN_DUTY + (40 * (SERVO_MAX_DUTY - SERVO_MIN_DUTY) / 180.0)
+    # Hold at 45 degrees for 2 seconds (motor holds position)
+    hold_duty = SERVO_MIN_DUTY + (45 * (SERVO_MAX_DUTY - SERVO_MIN_DUTY) / 180.0)
     servo.ChangeDutyCycle(hold_duty)
     time.sleep(2.0)
 
-    # Close: 40 → 100 (slow)
-    for deg in range(40, 101):
+    # Close: 45 → 100 (slow)
+    for deg in range(45, 101):
         servo_control(deg, delay=0.03)
 
     input("Done. Press Enter to exit...")
