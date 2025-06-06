@@ -186,21 +186,10 @@ Recommendations for optimal performance on Raspberry Pi:
 3. **CPU Overclocking**: Improve CPU performance within stable limits
 4. **Memory Split**: Adjust GPU memory allocation
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
-
-## 📄 License
-
-This project is distributed under the MIT License. See the LICENSE file for details.
 
 ## 👥 Development Team
 
-- **PPE Safety Team** - Initial development and maintenance
+- **HyunOh Hong, Jiseok Park** - Hanyang University
 
 ## 🔮 Future Plans
 
