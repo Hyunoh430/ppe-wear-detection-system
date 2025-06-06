@@ -22,21 +22,21 @@ def servo_control(degree, delay):
     time.sleep(delay)
 
 try:
-    # Open: 100 → 40 (fast)
-    for deg in range(100, 39, -1):
+    # Open: 100 → 60
+    for deg in range(100, 59, -1):
         servo_control(deg, delay=0.01)
 
-    time.sleep(1.2)  # pause open
+    time.sleep(1.2)
 
-    # Partial Close: 40 → 80 (slow)
-    for deg in range(40, 81):
+    # Partial close: 60 → 80 (slow)
+    for deg in range(60, 81):
         servo_control(deg, delay=0.03)
 
-    # Release: slight gravity assist
+    # Release for gravity-assisted close
     servo.ChangeDutyCycle(0)
     time.sleep(1.0)
 
-    # Return to 100 for next cycle
+    # Return to 100 (reset position)
     for deg in range(80, 101):
         servo_control(deg, delay=0.02)
 
