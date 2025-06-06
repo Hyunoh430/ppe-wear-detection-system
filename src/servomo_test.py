@@ -22,15 +22,18 @@ def servo_control(degree, delay):
     time.sleep(delay)
 
 try:
-    for deg in range(100, 9, -1):  # open (faster)
+    # open partially (100 → 40)
+    for deg in range(100, 39, -1):
         servo_control(deg, delay=0.01)
 
-    time.sleep(1.5)
+    # small pause to let lid stay open briefly
+    time.sleep(1)
 
-    for deg in range(10, 101):  # close (normal speed)
-        servo_control(deg, delay=0.03)
+    # release PWM signal (let gravity close lid)
+    servo.ChangeDutyCycle(0)
+    print("released for gravity-based closing")
 
-    input("Done. Press Enter to exit...")
+    input("Press Enter to exit...")
 
 except KeyboardInterrupt:
     pass
