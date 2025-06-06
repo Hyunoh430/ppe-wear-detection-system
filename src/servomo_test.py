@@ -5,35 +5,36 @@ servoPin = 2
 SERVO_MAX_DUTY = 12
 SERVO_MIN_DUTY = 3
 
-# 안전하게 초기화
 GPIO.cleanup()
 time.sleep(0.2)
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(servoPin, GPIO.OUT)
 
-# PWM 객체 생성 (주파수 50Hz)
-servo = GPIO.PWM(servoPin, 50)
+servo = GPIO.PWM(servoPin, 50)  # SG90 uses 50Hz
 servo.start(0)
 
-def servo_control(degree):
+def servo_control(degree, delay=0.03):
     if degree > 180: degree = 180
     if degree < 0: degree = 0
     duty = SERVO_MIN_DUTY + (degree * (SERVO_MAX_DUTY - SERVO_MIN_DUTY) / 180.0)
     servo.ChangeDutyCycle(duty)
-    print(f"Angle: {degree}°, Duty: {round(duty, 2)}")
-    time.sleep(0.05)
+    time.sleep(delay)
 
 try:
-    # 0 → 180도 (1도씩 증가)
-    for deg in range(0, 181):
+    # 닫힌 상태에서 열린 상태로 이동 (100 → 10)
+    print("열기 중...")
+    for deg in range(100, 9, -1):
         servo_control(deg)
+    print("열림 완료")
+    
+    time.sleep(1.5)
 
-    time.sleep(1)
-
-    # 180 → 0도 (1도씩 감소)
-    for deg in range(180, -1, -1):
+    # 열린 상태에서 닫힌 상태로 이동 (10 → 100)
+    print("닫기 중...")
+    for deg in range(10, 101):
         servo_control(deg)
+    print("닫힘 완료")
 
     input("Done. Press Enter to exit...")
 
