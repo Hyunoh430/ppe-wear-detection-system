@@ -24,7 +24,7 @@ def servo_control(degree, delay):
 try:
     # Open: 100 → 60
     for deg in range(100, 59, -1):
-        servo_control(deg, delay=0.01)
+        servo_control(deg, delay=0.03)
 
     time.sleep(1.2)
 
