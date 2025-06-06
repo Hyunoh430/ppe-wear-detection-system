@@ -14,7 +14,7 @@ GPIO.setup(servoPin, GPIO.OUT)
 servo = GPIO.PWM(servoPin, 50)
 servo.start(0)
 
-def servo_control(degree, delay=0.03):
+def servo_control(degree, delay):
     if degree > 180: degree = 180
     if degree < 0: degree = 0
     duty = SERVO_MIN_DUTY + (degree * (SERVO_MAX_DUTY - SERVO_MIN_DUTY) / 180.0)
@@ -22,13 +22,13 @@ def servo_control(degree, delay=0.03):
     time.sleep(delay)
 
 try:
-    for deg in range(100, 9, -1):  # open
-        servo_control(deg)
+    for deg in range(100, 9, -1):  # open (faster)
+        servo_control(deg, delay=0.01)
 
     time.sleep(1.5)
 
-    for deg in range(10, 101):  # close
-        servo_control(deg)
+    for deg in range(10, 101):  # close (normal speed)
+        servo_control(deg, delay=0.03)
 
     input("Done. Press Enter to exit...")
 
