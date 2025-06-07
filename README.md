@@ -184,7 +184,7 @@ Recommendations for optimal performance on Raspberry Pi:
 1. **Model Optimization**: Use quantized TFLite models
 2. **Resolution Adjustment**: Adjust camera resolution as needed
 3. **CPU Overclocking**: Improve CPU performance within stable limits
-4. **Memory Split**: Adjust GPU memory allocation
+
 
 
 ## 👥 Development Team
