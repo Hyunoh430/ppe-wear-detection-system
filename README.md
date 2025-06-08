@@ -194,7 +194,6 @@ Recommendations for optimal performance on Raspberry Pi:
 ## 🔮 Future Plans
 
 - [ ] Web-based monitoring dashboard
-- [ ] Multi-camera support
 - [ ] Cloud logging integration
 - [ ] Mobile app integration
 - [ ] AI model performance improvements
