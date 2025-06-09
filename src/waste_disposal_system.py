@@ -227,19 +227,19 @@ class WasteDisposalSystem:
     
     def _show_final_interface(self):
         """최종 인터페이스 표시 (고정)"""
-        print("\n" + "="*70)
+        print("\n" + "="*50)
         print("WASTE DISPOSAL SYSTEM - READY")
-        print("="*70)
+        print("="*50)
         print("KEYBOARD CONTROLS:")
         print("  SPACE - Start PPE detection")
         print("  R     - Reset detection session")
         print("  S     - Show detailed status")
         print("  H     - Show help")
         print("  Q     - Quit system")
-        print("="*70)
-        print("System is ready. Press SPACE to start PPE detection.")
-        print("Status will be shown below:")
-        print("-"*70)
+        print("="*50)
+        print("System ready. Press SPACE to start.")
+        print("Status updates below:")
+        print("-"*50)
     
     def _handle_keyboard_input(self):
         """Handle keyboard input"""
@@ -278,22 +278,22 @@ class WasteDisposalSystem:
     
     def _show_help_overlay(self):
         """도움말 오버레이 (기존 화면 유지)"""
-        print(f"\n" + "="*50)
+        print(f"\n" + "="*40)
         print("HELP - KEYBOARD CONTROLS")
-        print("="*50)
+        print("="*40)
         print("SPACE - Start PPE detection")
         print("R     - Reset detection session")
         print("S     - Show detailed status")
         print("H     - Show this help")
         print("Q     - Quit system")
-        print("="*50)
+        print("="*40)
     
     def _show_detailed_status(self):
         """상세 상태 출력 (오버레이 형식)"""
         stats = self.get_statistics()
-        print(f"\n" + "="*60)
+        print(f"\n" + "="*45)
         print("DETAILED SYSTEM STATUS")
-        print("="*60)
+        print("="*45)
         print(f"Runtime: {stats['runtime_seconds']:.1f} seconds")
         print(f"Processed frames: {stats['total_frames']}")
         print(f"Detection count: {stats['detection_count']}")
@@ -302,7 +302,7 @@ class WasteDisposalSystem:
         print(f"Door state: {stats['door_state']}")
         print(f"Detection active: {'Yes' if stats['detection_active'] else 'No'}")
         print(f"Detection sessions: {stats['detection_sessions']}")
-        print("="*60)
+        print("="*45)
     
     def _should_run_inference(self) -> tuple[bool, str]:
         """Determine if inference should run"""
@@ -437,6 +437,19 @@ class WasteDisposalSystem:
         if result.get('inference_active', False):
             inference_time = result.get('inference_time_ms', 0)
             status_parts.append(f"Detection:ACTIVE({inference_time:.0f}ms)")
+            
+            # 감지된 PPE 내용 표시
+            if result['detections']:
+                detected_items = []
+                for det in result['detections']:
+                    item_name = det['class_name'].replace('_', ' ')
+                    detected_items.append(f"{item_name}({det['confidence']:.2f})")
+                detection_summary = ", ".join(detected_items[:2])  # 최대 2개만 표시
+                if len(result['detections']) > 2:
+                    detection_summary += f" +{len(result['detections'])-2}more"
+                status_parts.append(f"Found:[{detection_summary}]")
+            else:
+                status_parts.append("Found:None")
         else:
             status_parts.append(f"Detection:{result.get('status_reason', 'PAUSED')}")
         
@@ -451,10 +464,6 @@ class WasteDisposalSystem:
                     status_parts.append("PPE:Ready")
             else:
                 status_parts.append("PPE:Missing")
-        
-        # Detection summary
-        if result['detections'] and result.get('inference_active', False):
-            status_parts.append(f"Found:{len(result['detections'])}")
         
         # Door timer
         if self.door_open_time:
