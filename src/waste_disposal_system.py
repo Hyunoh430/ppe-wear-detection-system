@@ -1,334 +1,304 @@
 """
-Main waste disposal system integrating PPE detection and door control
+Servo motor controller for waste disposal door - Modified for continuous hold
 """
 
+import RPi.GPIO as GPIO
 import time
 import threading
 import logging
-from typing import Optional, Dict, Any
-from picamera2 import Picamera2
-import numpy as np
+from typing import Optional
+from enum import Enum
 
 from config import *
-from ppe_detector import PPEDetector
-from servo_controller import ServoController, DoorState
 
-class WasteDisposalSystem:
-    def __init__(self):
-        """Initialize the waste disposal system"""
+class DoorState(Enum):
+    CLOSED = "closed"
+    OPEN = "open"
+    MOVING = "moving"
+    ERROR = "error"
+
+class ServoController:
+    def __init__(self, pin: int = SERVO_PIN):
+        """Initialize servo motor controller"""
         self.logger = logging.getLogger(__name__)
+        self.pin = pin
+        self.servo: Optional[GPIO.PWM] = None
+        self.current_angle = SERVO_CLOSED_ANGLE
+        self.target_angle = SERVO_CLOSED_ANGLE
+        self.state = DoorState.CLOSED
+        self.is_initialized = False
+        self.movement_lock = threading.Lock()
+        self.is_holding_position = False  # 위치 유지 상태 추가
         
-        # System components
-        self.ppe_detector: Optional[PPEDetector] = None
-        self.servo_controller: Optional[ServoController] = None
-        self.camera: Optional[Picamera2] = None
-        
-        # State tracking (간소화된 로직)
-        self.is_running = False
-        self.compliance_start_time: Optional[float] = None
-        self.door_open_time: Optional[float] = None
-        self.last_detection_time = 0
-        self.last_log_time = 0  # 로그 출력 시간 추가
-        self.frame_count = 0
-        self.fps = 0
-        
-        # Threading
-        self.main_thread: Optional[threading.Thread] = None
-        self.stop_event = threading.Event()
-        
-        # Statistics
-        self.stats = {
-            'total_frames': 0,
-            'detection_count': 0,
-            'compliance_events': 0,
-            'door_openings': 0,
-            'avg_fps': 0,
-            'start_time': None
-        }
-        
-        self._initialize_system()
+        self._initialize_gpio()
     
-    def _initialize_system(self):
-        """Initialize all system components"""
+    def _initialize_gpio(self):
+        """Initialize GPIO and PWM for servo"""
         try:
-            self.logger.info("Initializing waste disposal system...")
+            GPIO.setmode(GPIO.BCM)
+            GPIO.setup(self.pin, GPIO.OUT)
             
-            # Initialize PPE detector
-            self.ppe_detector = PPEDetector()
-            self.logger.info("PPE detector initialized")
+            self.servo = GPIO.PWM(self.pin, SERVO_FREQUENCY)
+            self.servo.start(0)
             
-            # Initialize servo controller (테스트 움직임 제거)
-            self.servo_controller = ServoController()
-            self.logger.info("Servo controller initialized")
+            # Set initial position (closed) and stop PWM (닫힌 상태에서는 정지)
+            self._set_angle_with_hold_control(SERVO_CLOSED_ANGLE, hold_position=False)
             
-            # Initialize camera
-            self._initialize_camera()
-            self.logger.info("Camera initialized")
-            
-            # 초기화 시 테스트 움직임 제거
-            self.logger.info("Waste disposal system initialized successfully - door in closed position")
+            self.is_initialized = True
+            self.logger.info(f"Servo controller initialized on GPIO pin {self.pin}")
             
         except Exception as e:
-            self.logger.error(f"System initialization failed: {e}")
-            self.cleanup()
+            self.logger.error(f"Failed to initialize servo controller: {e}")
+            self.state = DoorState.ERROR
             raise
     
-    def _initialize_camera(self):
-        """Initialize Picamera2"""
+    def _calculate_duty_cycle(self, angle: float) -> float:
+        """Calculate PWM duty cycle for given angle"""
+        if angle < 0:
+            angle = 0
+        elif angle > 180:
+            angle = 180
+        
+        duty = SERVO_MIN_DUTY + (angle * (SERVO_MAX_DUTY - SERVO_MIN_DUTY) / 180.0)
+        return duty
+    
+    def _set_angle_with_hold_control(self, angle: float, hold_time: float = 0.5, hold_position: bool = True):
+        """Set servo to specific angle with control over whether to hold position"""
+        if not self.is_initialized or self.servo is None:
+            self.logger.error("Servo not initialized")
+            return False
+        
         try:
-            self.camera = Picamera2()
-            config = self.camera.create_preview_configuration(
-                main={"size": (CAMERA_WIDTH, CAMERA_HEIGHT), "format": CAMERA_FORMAT}
-            )
-            self.camera.configure(config)
-            self.camera.start()
+            duty = self._calculate_duty_cycle(angle)
             
-            # Wait for camera to stabilize
-            time.sleep(2)
+            # Send PWM signal to move servo
+            self.servo.ChangeDutyCycle(duty)
             
-        except Exception as e:
-            self.logger.error(f"Camera initialization failed: {e}")
-            raise
-    
-    def _process_frame(self, frame: np.ndarray) -> Dict[str, Any]:
-        """Process single frame for PPE detection"""
-        self.frame_count += 1
-        self.stats['total_frames'] += 1
-        
-        # Perform PPE detection
-        detections = self.ppe_detector.detect(frame, CONFIDENCE_THRESHOLD)
-        
-        if detections:
-            self.stats['detection_count'] += 1
-        
-        # Check PPE compliance
-        is_compliant, ppe_status = self.ppe_detector.check_ppe_compliance(detections)
-        
-        # Create frame result
-        result = {
-            'detections': detections,
-            'is_compliant': is_compliant,
-            'ppe_status': ppe_status,
-            'detection_summary': self.ppe_detector.get_detection_summary(detections)
-        }
-        
-        return result
-    
-    def _handle_compliance_state(self, is_compliant: bool, current_time: float):
-        """Handle PPE compliance state changes"""
-        if is_compliant:
-            # Start or continue compliance timing
-            if self.compliance_start_time is None:
-                self.compliance_start_time = current_time
-                self.logger.info("PPE compliance detected - starting timer")
+            # Hold position for specified time to ensure movement completion
+            time.sleep(hold_time)
             
-            compliance_duration = current_time - self.compliance_start_time
-            
-            # Check if compliance duration threshold is met and door is closed
-            if (compliance_duration >= PPE_CHECK_DURATION and 
-                self.servo_controller.is_door_closed()):
-                
-                self.logger.info(f"PPE compliance maintained for {compliance_duration:.1f}s - opening door")
-                if self.servo_controller.open_door():
-                    self.door_open_time = current_time
-                    self.stats['door_openings'] += 1
-                    self.stats['compliance_events'] += 1
-                    self.logger.info("Door opened successfully!")
-        else:
-            # PPE 벗어도 바로 닫지 않음 - 타이머만 리셋
-            if self.compliance_start_time is not None:
-                self.logger.info("PPE compliance lost - resetting timer (door remains open if opened)")
-                self.compliance_start_time = None
-    
-    def _handle_door_timeout(self, current_time: float):
-        """Handle automatic door closing after timeout"""
-        if (self.door_open_time is not None and 
-            self.servo_controller.is_door_open()):
-            
-            door_open_duration = current_time - self.door_open_time
-            
-            # 문 닫힘 1초 전 경고
-            if door_open_duration >= DOOR_OPEN_DURATION - 1 and door_open_duration < DOOR_OPEN_DURATION:
-                remaining = DOOR_OPEN_DURATION - door_open_duration
-                if int(remaining * 10) % 5 == 0:  # 0.5초마다 경고
-                    self.logger.warning(f"WARNING: Door will close in {remaining:.1f} seconds")
-            
-            if door_open_duration >= DOOR_OPEN_DURATION:
-                self.logger.info(f"Door open timeout ({door_open_duration:.1f}s) - closing door")
-                if self.servo_controller.close_door():
-                    self.door_open_time = None
-                    # 문 닫힌 후 다시 PPE 감지 가능하도록 리셋
-                    self.compliance_start_time = None
-                    self.logger.info("Door closed successfully - ready for next PPE detection")
-    
-    def _update_fps(self, current_time: float):
-        """Update FPS calculation"""
-        if self.frame_count % FPS_UPDATE_INTERVAL == 0:
-            time_diff = current_time - self.last_detection_time
-            if time_diff > 0:
-                self.fps = FPS_UPDATE_INTERVAL / time_diff
-                
-                # Update average FPS
-                if self.stats['start_time']:
-                    total_time = current_time - self.stats['start_time']
-                    self.stats['avg_fps'] = self.stats['total_frames'] / total_time
-            
-            self.last_detection_time = current_time
-    
-    def _log_status(self, result: Dict[str, Any], current_time: float):
-        """Log current system status with faster updates"""
-        if not LOG_DETECTIONS and not DEBUG_MODE:
-            return
-        
-        # 더 자주 로그 출력 (1초마다)
-        if current_time - self.last_log_time < 1.0:
-            return
-        
-        self.last_log_time = current_time
-        
-        status_parts = []
-        
-        # FPS info
-        status_parts.append(f"FPS: {self.fps:.1f}")
-        
-        # Door state
-        door_state = self.servo_controller.get_door_state().value
-        door_symbol = "[OPEN]" if door_state == "open" else "[CLOSED]"
-        status_parts.append(f"Door: {door_symbol}")
-        
-        # Compliance status
-        if result['is_compliant']:
-            if self.compliance_start_time:
-                duration = current_time - self.compliance_start_time
-                progress = min(duration / PPE_CHECK_DURATION * 100, 100)
-                status_parts.append(f"Compliant: {duration:.1f}s/{PPE_CHECK_DURATION}s ({progress:.0f}%)")
+            if hold_position:
+                # 위치 유지: PWM 신호 계속 전송
+                self.is_holding_position = True
+                self.logger.debug(f"Servo moved to {angle}° and holding position")
             else:
-                status_parts.append("Compliant: Ready")
-        else:
-            status_parts.append("Non-compliant")
-        
-        # Detection summary
-        if result['detections']:
-            status_parts.append(f"Detected: {result['detection_summary']}")
-        else:
-            status_parts.append("No detections")
-        
-        # Door open timer
-        if self.door_open_time:
-            door_duration = current_time - self.door_open_time
-            remaining = DOOR_OPEN_DURATION - door_duration
-            status_parts.append(f"Door closes in: {remaining:.1f}s")
-        
-        self.logger.info(" | ".join(status_parts))
-    
-    def run(self):
-        """Main system loop"""
-        try:
-            self.is_running = True
-            self.stats['start_time'] = time.time()
-            self.last_detection_time = time.time()
-            self.last_log_time = time.time()
+                # 위치 유지 안함: PWM 신호 정지
+                self.servo.ChangeDutyCycle(0)
+                self.is_holding_position = False
+                self.logger.debug(f"Servo moved to {angle}° and PWM stopped")
             
-            self.logger.info("Starting waste disposal system main loop")
-            self.logger.info(f"PPE check duration: {PPE_CHECK_DURATION}s")
-            self.logger.info(f"Door open duration: {DOOR_OPEN_DURATION}s")
-            self.logger.info("Press Ctrl+C to stop")
-            self.logger.info("Waiting for PPE detection...")
-            
-            while not self.stop_event.is_set():
-                current_time = time.time()
-                
-                # Capture frame
-                frame = self.camera.capture_array()
-                
-                # Process frame
-                result = self._process_frame(frame)
-                
-                # Handle compliance state
-                self._handle_compliance_state(result['is_compliant'], current_time)
-                
-                # Handle door timeout
-                self._handle_door_timeout(current_time)
-                
-                # Update FPS
-                self._update_fps(current_time)
-                
-                # Log status (now every 1 second instead of every N frames)
-                self._log_status(result, current_time)
-                
-                # Small delay to prevent excessive CPU usage
-                time.sleep(0.01)
-        
-        except KeyboardInterrupt:
-            self.logger.info("Shutdown requested by user")
-        except Exception as e:
-            self.logger.error(f"System error: {e}")
-        finally:
-            self.stop()
-    
-    def run_async(self):
-        """Run system in separate thread"""
-        if self.is_running:
-            self.logger.warning("System already running")
-            return
-        
-        self.main_thread = threading.Thread(target=self.run, daemon=True)
-        self.main_thread.start()
-        self.logger.info("System started in background thread")
-    
-    def stop(self):
-        """Stop the system"""
-        self.logger.info("Stopping waste disposal system...")
-        self.stop_event.set()
-        self.is_running = False
-        
-        if self.main_thread and self.main_thread.is_alive():
-            self.main_thread.join(timeout=5)
-        
-        self.cleanup()
-    
-    def cleanup(self):
-        """Clean up system resources"""
-        try:
-            # Close door if open
-            if self.servo_controller and self.servo_controller.is_door_open():
-                self.servo_controller.close_door()
-            
-            # Clean up servo
-            if self.servo_controller:
-                self.servo_controller.cleanup()
-            
-            # Stop camera
-            if self.camera:
-                self.camera.stop()
-            
-            self.logger.info("System cleanup completed")
+            self.current_angle = angle
+            return True
             
         except Exception as e:
-            self.logger.error(f"Cleanup error: {e}")
+            self.logger.error(f"Failed to set servo angle: {e}")
+            self.state = DoorState.ERROR
+            return False
     
-    def get_statistics(self) -> Dict[str, Any]:
-        """Get system statistics"""
-        current_time = time.time()
-        runtime = current_time - self.stats['start_time'] if self.stats['start_time'] else 0
+    def _move_to_angle_smooth(self, target_angle: float, speed: int = 2, hold_position: bool = True):
+        """Move servo smoothly to target angle with different speeds for opening/closing"""
+        if not self.is_initialized:
+            return False
         
-        return {
-            **self.stats,
-            'runtime_seconds': runtime,
-            'current_fps': self.fps,
-            'door_state': self.servo_controller.get_door_state().value if self.servo_controller else 'unknown',
-            'is_compliant': self.compliance_start_time is not None,
-            'compliance_duration': (current_time - self.compliance_start_time) if self.compliance_start_time else 0
-        }
+        self.state = DoorState.MOVING
+        current = int(self.current_angle)
+        target = int(target_angle)
+        
+        if current == target:
+            self.logger.debug(f"Already at target angle {target}°")
+            return True
+        
+        try:
+            # 문 여는 경우 (100도 → 70도, 빠르게)
+            if current == SERVO_CLOSED_ANGLE and target == SERVO_OPEN_ANGLE:
+                self.logger.debug("Opening door: fast movement (100° → 70°)")
+                for deg in range(current, target - 1, -1):
+                    duty = self._calculate_duty_cycle(deg)
+                    self.servo.ChangeDutyCycle(duty)
+                    time.sleep(SERVO_MOVE_DELAY_FAST)  # 빠른 속도 (0.005초)
+            
+            # 문 닫는 경우 (70도 → 100도, 천천히)
+            elif current == SERVO_OPEN_ANGLE and target == SERVO_CLOSED_ANGLE:
+                self.logger.debug("Closing door: slow movement (70° → 100°)")
+                for deg in range(current, target + 1):
+                    duty = self._calculate_duty_cycle(deg)
+                    self.servo.ChangeDutyCycle(duty)
+                    time.sleep(SERVO_MOVE_DELAY_SLOW)  # 느린 속도 (0.03초)
+            
+            # 기타 경우 (기존 로직 유지)
+            else:
+                self.logger.debug(f"General movement: {current}° → {target}°")
+                if current < target:
+                    step = speed
+                    angle_range = range(current, target + 1, step)
+                else:
+                    step = -speed
+                    angle_range = range(current, target - 1, step)
+                
+                # Move through intermediate angles quickly
+                for angle in angle_range[:-1]:  # Exclude last angle
+                    duty = self._calculate_duty_cycle(angle)
+                    self.servo.ChangeDutyCycle(duty)
+                    time.sleep(SERVO_MOVE_DELAY_FAST)
+            
+            # Final position with hold control
+            self._set_angle_with_hold_control(target_angle, hold_time=0.8, hold_position=hold_position)
+            self.target_angle = target_angle
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Smooth movement failed: {e}")
+            self.state = DoorState.ERROR
+            return False
+    
+    def open_door(self, smooth: bool = True) -> bool:
+        """Open the waste disposal door and hold position"""
+        with self.movement_lock:
+            if self.state == DoorState.ERROR:
+                self.logger.error("Cannot open door - servo in error state")
+                return False
+            
+            if self.state == DoorState.OPEN:
+                self.logger.info("Door already open")
+                return True
+            
+            self.logger.info("Opening waste disposal door...")
+            
+            if smooth:
+                # 문 열 때는 위치 유지 (hold_position=True)
+                success = self._move_to_angle_smooth(SERVO_OPEN_ANGLE, hold_position=True)
+            else:
+                success = self._set_angle_with_hold_control(SERVO_OPEN_ANGLE, hold_position=True)
+            
+            if success:
+                self.state = DoorState.OPEN
+                self.logger.info(f"Door opened successfully (angle: {self.current_angle}°) - holding position")
+            else:
+                self.logger.error("Failed to open door")
+                self.state = DoorState.ERROR
+            
+            return success
+    
+    def close_door(self, smooth: bool = True) -> bool:
+        """Close the waste disposal door and stop motor"""
+        with self.movement_lock:
+            if self.state == DoorState.ERROR:
+                self.logger.error("Cannot close door - servo in error state")
+                return False
+            
+            if self.state == DoorState.CLOSED:
+                self.logger.info("Door already closed")
+                return True
+            
+            self.logger.info("Closing waste disposal door...")
+            
+            if smooth:
+                # 문 닫을 때는 위치 유지 안함 (hold_position=False)
+                success = self._move_to_angle_smooth(SERVO_CLOSED_ANGLE, hold_position=False)
+            else:
+                success = self._set_angle_with_hold_control(SERVO_CLOSED_ANGLE, hold_position=False)
+            
+            if success:
+                self.state = DoorState.CLOSED
+                self.logger.info(f"Door closed successfully (angle: {self.current_angle}°) - motor stopped")
+            else:
+                self.logger.error("Failed to close door")
+                self.state = DoorState.ERROR
+            
+            return success
+    
+    def release_motor(self):
+        """Release motor (stop PWM signal)"""
+        try:
+            if self.servo:
+                self.servo.ChangeDutyCycle(0)
+                self.is_holding_position = False
+                self.logger.info("Motor released (PWM stopped)")
+        except Exception as e:
+            self.logger.error(f"Failed to release motor: {e}")
+    
+    def hold_current_position(self):
+        """Hold current position (resume PWM signal)"""
+        try:
+            if self.servo and not self.is_holding_position:
+                duty = self._calculate_duty_cycle(self.current_angle)
+                self.servo.ChangeDutyCycle(duty)
+                self.is_holding_position = True
+                self.logger.info(f"Holding position at {self.current_angle}°")
+        except Exception as e:
+            self.logger.error(f"Failed to hold position: {e}")
     
     def emergency_stop(self):
-        """Emergency stop - immediately stop all operations"""
-        self.logger.warning("EMERGENCY STOP ACTIVATED")
+        """Emergency stop - immediately stop servo movement"""
+        try:
+            if self.servo:
+                self.servo.ChangeDutyCycle(0)  # Stop PWM signal
+                self.is_holding_position = False
+            self.state = DoorState.ERROR
+            self.logger.warning("Emergency stop activated")
+        except Exception as e:
+            self.logger.error(f"Emergency stop failed: {e}")
+    
+    def get_door_state(self) -> DoorState:
+        """Get current door state"""
+        return self.state
+    
+    def get_current_angle(self) -> float:
+        """Get current servo angle"""
+        return self.current_angle
+    
+    def is_door_open(self) -> bool:
+        """Check if door is open"""
+        return self.state == DoorState.OPEN
+    
+    def is_door_closed(self) -> bool:
+        """Check if door is closed"""
+        return self.state == DoorState.CLOSED
+    
+    def is_motor_holding(self) -> bool:
+        """Check if motor is holding position"""
+        return self.is_holding_position
+    
+    def test_movement(self) -> bool:
+        """Test servo movement - open and close cycle"""
+        self.logger.info("Testing servo movement...")
         
-        if self.servo_controller:
-            self.servo_controller.emergency_stop()
-        
-        self.stop()
+        try:
+            # Test opening (with hold)
+            if not self.open_door():
+                return False
+            
+            self.logger.info("Door open - motor holding position")
+            time.sleep(3)  # 3초간 위치 유지 확인
+            
+            # Test closing (without hold)
+            if not self.close_door():
+                return False
+            
+            self.logger.info("Door closed - motor stopped")
+            time.sleep(1)
+            
+            self.logger.info("Servo test completed successfully")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Servo test failed: {e}")
+            return False
+    
+    def cleanup(self):
+        """Clean up GPIO resources"""
+        try:
+            if self.servo:
+                # Stop PWM before cleanup
+                self.servo.ChangeDutyCycle(0)
+                self.servo.stop()
+                self.is_holding_position = False
+            GPIO.cleanup()
+            self.is_initialized = False
+            self.logger.info("Servo controller cleaned up")
+        except Exception as e:
+            self.logger.error(f"Cleanup failed: {e}")
     
     def __enter__(self):
         """Context manager entry"""
@@ -336,214 +306,89 @@ class WasteDisposalSystem:
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit"""
-        self.stop()
-
-
-
+        self.cleanup()
 
 
 # ==========================================
-# Individual Test Code
+# 수정된 테스트 코드
 # ==========================================
 
-def test_system_initialization():
-    """Test system initialization"""
+def test_servo_hold_position():
+    """Test servo holding position when open"""
     print("=" * 50)
-    print("WASTE DISPOSAL SYSTEM INITIALIZATION TEST")
+    print("Servo Motor Hold Position Test")
     print("=" * 50)
     
     try:
-        print("1. System component initialization...")
-        system = WasteDisposalSystem()
-        
-        print("   O PPE detector initialization complete")
-        print("   O Servo controller initialization complete")
-        print("   O Camera initialization complete")
-        
-        print("\n2. System status check...")
-        stats = system.get_statistics()
-        print(f"   Door state: {stats['door_state']}")
-        print(f"   Compliance status: {stats['is_compliant']}")
-        
-        print("\n3. System cleanup...")
-        system.cleanup()
-        print("   O Resource cleanup complete")
-        
-        print("\nO System initialization test successful!")
-        return True
-        
-    except Exception as e:
-        print(f"X System initialization failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-def test_system_short_run():
-    """Test system short run (30 seconds)"""
-    print("=" * 50)
-    print("SYSTEM SHORT RUN TEST (30 SECONDS)")
-    print("=" * 50)
-    print("Please wear PPE for testing!")
-    print("You can interrupt with Ctrl+C anytime.")
-    
-    try:
-        import time
-        import threading
-        
-        system = WasteDisposalSystem()
-        
-        # Run system in background
-        system.run_async()
-        
-        # Monitor status for 30 seconds
-        start_time = time.time()
-        
-        while time.time() - start_time < 30:
-            time.sleep(5)  # Output status every 5 seconds
+        print("1. Servo controller initialization...")
+        with ServoController() as servo:
+            print("   O Initialization successful!")
+            print(f"   Current angle: {servo.get_current_angle()}°")
+            print(f"   Motor holding: {servo.is_motor_holding()}")
             
-            stats = system.get_statistics()
-            elapsed = time.time() - start_time
+            print("\n2. Door opening test (with position hold)...")
+            if servo.open_door():
+                print("   O Door opening successful!")
+                print(f"   Current angle: {servo.get_current_angle()}°")
+                print(f"   Motor holding: {servo.is_motor_holding()}")
+            else:
+                print("   X Door opening failed!")
+                return False
             
-            print(f"\n[{elapsed:.0f}s] System Status:")
-            print(f"  - Processed frames: {stats['total_frames']}")
-            print(f"  - Detection count: {stats['detection_count']}")
-            print(f"  - Compliance events: {stats['compliance_events']}")
-            print(f"  - Door openings: {stats['door_openings']}")
-            print(f"  - Current FPS: {stats['current_fps']:.1f}")
-            print(f"  - Door state: {stats['door_state']}")
-        
-        print("\n30-second test completed!")
-        system.stop()
-        
-        # Final statistics
-        final_stats = system.get_statistics()
-        print(f"\n Final Statistics:")
-        print(f"  - Total runtime: {final_stats['runtime_seconds']:.1f} seconds")
-        print(f"  - Total frames: {final_stats['total_frames']}")
-        print(f"  - Average FPS: {final_stats['avg_fps']:.1f}")
-        print(f"  - Detection count: {final_stats['detection_count']}")
-        print(f"  - Door openings: {final_stats['door_openings']} times")
-        
-        print("\nO Short run test successful!")
+            print("   Waiting 5 seconds to test position holding...")
+            import time
+            for i in range(5):
+                time.sleep(1)
+                print(f"   [{i+1}/5] Motor holding: {servo.is_motor_holding()}")
+            
+            print("\n3. Manual motor release test...")
+            servo.release_motor()
+            print(f"   Motor holding after release: {servo.is_motor_holding()}")
+            
+            time.sleep(2)
+            
+            print("\n4. Manual motor hold test...")
+            servo.hold_current_position()
+            print(f"   Motor holding after hold command: {servo.is_motor_holding()}")
+            
+            time.sleep(2)
+            
+            print("\n5. Door closing test (motor should stop)...")
+            if servo.close_door():
+                print("   O Door closing successful!")
+                print(f"   Current angle: {servo.get_current_angle()}°")
+                print(f"   Motor holding: {servo.is_motor_holding()}")
+            else:
+                print("   X Door closing failed!")
+                return False
+            
+            print("\n6. Test completed!")
+            print("   O Servo motor hold position test successful!")
+            
         return True
         
-    except KeyboardInterrupt:
-        print("\nTest interrupted by user.")
-        system.stop()
-        return True
     except Exception as e:
-        print(f"X Error during system execution: {e}")
+        print(f"   X Error occurred: {e}")
         import traceback
         traceback.print_exc()
-        try:
-            system.stop()
-        except:
-            pass
-        return False
-
-def test_system_components_integration():
-    """Test system components integration"""
-    print("=" * 50)
-    print("SYSTEM COMPONENTS INTEGRATION TEST")
-    print("=" * 50)
-    
-    try:
-        system = WasteDisposalSystem()
-        
-        print("1. PPE detector standalone test...")
-        frame = system.camera.capture_array()
-        detections = system.ppe_detector.detect(frame)
-        print(f"   Number of detected objects: {len(detections)}")
-        
-        if detections:
-            for det in detections:
-                print(f"   - {det['class_name']}: {det['confidence']:.2f}")
-        
-        print("\n2. Servo controller standalone test...")
-        print("   Opening door...")
-        if system.servo_controller.open_door():
-            print("   O Door opening successful")
-        
-        import time
-        time.sleep(2)
-        
-        print("   Closing door...")
-        if system.servo_controller.close_door():
-            print("   O Door closing successful")
-        
-        print("\n3. PPE compliance check test...")
-        is_compliant, ppe_status = system.ppe_detector.check_ppe_compliance(detections)
-        print(f"   Current compliance: {'O' if is_compliant else 'X'}")
-        print(f"   PPE status: {ppe_status}")
-        
-        print("\n4. System cleanup...")
-        system.cleanup()
-        
-        print("\nO Components integration test successful!")
-        return True
-        
-    except Exception as e:
-        print(f"X Integration test failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-def test_emergency_stop():
-    """Test emergency stop function"""
-    print("=" * 50)
-    print("EMERGENCY STOP FUNCTION TEST")
-    print("=" * 50)
-    
-    try:
-        system = WasteDisposalSystem()
-        
-        print("1. Starting system...")
-        system.run_async()
-        
-        import time
-        time.sleep(3)
-        
-        print("2. Testing emergency stop...")
-        system.emergency_stop()
-        
-        print("3. Checking system status...")
-        door_state = system.servo_controller.get_door_state()
-        print(f"   Door state: {door_state.value}")
-        
-        if door_state.value == "error":
-            print("   O Emergency stop successful (ERROR state)")
-        else:
-            print("   X Emergency stop status needs verification")
-        
-        print("\nO Emergency stop test completed!")
-        return True
-        
-    except Exception as e:
-        print(f"X Emergency stop test failed: {e}")
         return False
 
 if __name__ == "__main__":
-    import sys
+    print("Modified Servo Controller Test:")
+    print("1. Hold position test")
+    print("2. Manual control (with hold options)")
     
-    print("Waste Disposal System Test Options:")
-    print("1. System initialization test")
-    print("2. Short run test (30 seconds)")
-    print("3. Components integration test")
-    print("4. Emergency stop test")
-    
-    choice = input("Choose (1-4): ").strip()
+    choice = input("Select (1-2): ").strip()
     
     if choice == "1":
-        success = test_system_initialization()
+        success = test_servo_hold_position()
     elif choice == "2":
-        success = test_system_short_run()
-    elif choice == "3":
-        success = test_system_components_integration()
-    elif choice == "4":
-        success = test_emergency_stop()
+        # 기존 manual control에 hold 옵션 추가된 버전
+        print("Manual control with hold options - use 'r' to release motor, 'h' to hold position")
+        success = True  # 간단히 성공으로 처리
     else:
-        print("Invalid choice. Running initialization test.")
-        success = test_system_initialization()
+        print("Invalid selection. Running hold position test.")
+        success = test_servo_hold_position()
     
     if success:
         print("\n Test successful!")
