@@ -74,7 +74,7 @@ class ServoController:
         try:
             duty = self._calculate_duty_cycle(angle)
             self.servo.ChangeDutyCycle(duty)
-            time.sleep(0.5)  # 이동 완료 대기
+            time.sleep(0.8)  # 좀 더 긴 이동 완료 대기
             self.current_angle = angle
             return True
         except Exception as e:
@@ -99,7 +99,7 @@ class ServoController:
                 if smooth:
                     # 부드러운 이동: 100도 → 70도 (빠르게) - 고정값 사용
                     self.logger.info("Moving from 100° to 70°...")
-                    for deg in range(100, 59, -1):  # 명시적으로 100에서 70으로
+                    for deg in range(100, 69, -1):  # 명시적으로 100에서 70으로
                         duty = self._calculate_duty_cycle(deg)
                         self.servo.ChangeDutyCycle(duty)
                         time.sleep(0.005)  # 빠른 속도
@@ -108,10 +108,11 @@ class ServoController:
                     # 직접 이동
                     self._move_to_angle_direct(SERVO_OPEN_ANGLE)
                 
-                # 최종 위치에서 계속 힘을 가함 (홀드)
+                # 최종 위치 설정 후 안정화
                 final_duty = self._calculate_duty_cycle(70)  # 명시적으로 70도
                 self.servo.ChangeDutyCycle(final_duty)
-                self.logger.info(f"Holding at 70° with duty cycle: {final_duty:.2f}")
+                time.sleep(0.2)  # 안정화 시간
+                self.logger.info(f"Door at 70° with duty cycle: {final_duty:.2f} - holding position")
                 
                 self.current_angle = 70
                 self.state = DoorState.OPEN
