@@ -1,6 +1,6 @@
 """
-깔끔한 출력을 위한 개선된 폐기물 처리 시스템
-키보드 입력과 로그 출력이 겹치지 않도록 개선
+로그 메시지가 화면을 밀어내는 문제 해결
+초기 메시지만 표시하고 이후에는 상태 바만 업데이트
 """
 
 import time
@@ -17,52 +17,58 @@ from config import *
 from ppe_detector import PPEDetector
 from servo_controller import ServoController, DoorState
 
-class CleanOutputManager:
-    """깔끔한 출력 관리 클래스"""
+class FixedOutputManager:
+    """로그 밀림 문제를 해결한 출력 관리 클래스"""
     
     def __init__(self):
         self.output_lock = threading.Lock()
-        self.last_status_line = ""
+        self.initialization_complete = False
         self.status_update_time = 0
         
     def clear_line(self):
         """현재 줄 지우기"""
-        sys.stdout.write('\r' + ' ' * 80 + '\r')
+        sys.stdout.write('\r' + ' ' * 100 + '\r')
         sys.stdout.flush()
         
-    def print_message(self, message, message_type="INFO"):
-        """메시지 깔끔하게 출력"""
-        with self.output_lock:
-            self.clear_line()
-            timestamp = time.strftime("%H:%M:%S")
-            print(f"[{timestamp}] {message_type}: {message}")
-            sys.stdout.flush()
+    def print_init_message(self, message, message_type="INFO"):
+        """초기화 중에만 메시지 출력"""
+        if not self.initialization_complete:
+            with self.output_lock:
+                timestamp = time.strftime("%H:%M:%S")
+                print(f"[{timestamp}] {message_type}: {message}")
+                sys.stdout.flush()
     
+    def mark_initialization_complete(self):
+        """초기화 완료 표시 - 이후 메시지 출력 중단"""
+        self.initialization_complete = True
+        
     def print_status(self, status_text):
-        """상태 메시지를 한 줄에 계속 업데이트"""
+        """상태 메시지를 한 줄에 계속 업데이트 (덮어쓰기)"""
+        if not self.initialization_complete:
+            return
+            
         with self.output_lock:
             current_time = time.time()
-            # 1초에 한 번만 업데이트
-            if current_time - self.status_update_time < 1.0:
+            # 0.5초에 한 번만 업데이트
+            if current_time - self.status_update_time < 0.5:
                 return
                 
             self.clear_line()
-            # 상태를 한 줄에 표시
-            truncated_status = status_text[:75] + "..." if len(status_text) > 75 else status_text
+            # 상태를 한 줄에 표시 (길이 제한)
+            truncated_status = status_text[:90] + "..." if len(status_text) > 90 else status_text
             sys.stdout.write(f"\rSTATUS: {truncated_status}")
             sys.stdout.flush()
-            self.last_status_line = truncated_status
             self.status_update_time = current_time
     
     def print_key_action(self, action):
-        """키 액션을 강조해서 출력"""
+        """키 액션만 새 줄에 출력"""
         with self.output_lock:
             self.clear_line()
             print(f"\n>>> {action} <<<")
             sys.stdout.flush()
 
-class RaspberryPiKeyboardListener:
-    """라즈베리파이에서 확실히 작동하는 키보드 리스너"""
+class QuietKeyboardListener:
+    """조용한 키보드 리스너 (초기화 메시지 최소화)"""
     
     def __init__(self, output_manager):
         self.old_settings = None
@@ -85,39 +91,36 @@ class RaspberryPiKeyboardListener:
         return ch
     
     def _input_thread_function(self):
-        """별도 스레드에서 키보드 입력 처리"""
+        """별도 스레드에서 키보드 입력 처리 (에러만 출력)"""
         while self.running:
             try:
-                # 블로킹 방식으로 키 입력 대기
                 char = self._getch()
-                
                 with self.lock:
                     self.latest_char = char
                     self.char_available = True
-                    
             except Exception as e:
                 if self.running:
-                    self.output_manager.print_message(f"Keyboard input error: {e}", "ERROR")
+                    # 초기화 완료 후에는 에러도 출력 안함
+                    if not self.output_manager.initialization_complete:
+                        self.output_manager.print_init_message(f"Keyboard error: {e}", "ERROR")
                 time.sleep(0.1)
     
     def start(self):
-        """키보드 리스너 시작"""
+        """키보드 리스너 시작 (메시지 최소화)"""
         if self.running:
             return
         
-        self.output_manager.print_message("Starting Raspberry Pi keyboard listener...")
+        self.output_manager.print_init_message("Starting keyboard listener...")
         self.running = True
         self.input_thread = threading.Thread(target=self._input_thread_function, daemon=True)
         self.input_thread.start()
-        self.output_manager.print_message("Keyboard listener started")
+        self.output_manager.print_init_message("Keyboard listener ready")
     
     def stop(self):
-        """키보드 리스너 중지"""
-        self.output_manager.print_message("Stopping keyboard listener...")
+        """키보드 리스너 중지 (메시지 없음)"""
         self.running = False
         if self.input_thread and self.input_thread.is_alive():
-            self.input_thread.join(timeout=2.0)
-        self.output_manager.print_message("Keyboard listener stopped")
+            self.input_thread.join(timeout=1.0)
     
     def get_char(self):
         """키보드 입력 가져오기 (논블로킹)"""
@@ -128,19 +131,14 @@ class RaspberryPiKeyboardListener:
                 self.latest_char = None
                 return char
         return None
-    
-    def has_input(self):
-        """입력이 있는지 확인"""
-        with self.lock:
-            return self.char_available
 
 class WasteDisposalSystem:
     def __init__(self):
         """Initialize the waste disposal system"""
         # 출력 관리자 먼저 생성
-        self.output_manager = CleanOutputManager()
+        self.output_manager = FixedOutputManager()
         
-        # 로거 설정 (콘솔 출력 비활성화)
+        # 로거 설정 - 파일로만 출력하고 콘솔은 끄기
         self.logger = logging.getLogger(__name__)
         
         # System components
@@ -148,8 +146,8 @@ class WasteDisposalSystem:
         self.servo_controller: Optional[ServoController] = None
         self.camera: Optional[Picamera2] = None
         
-        # Keyboard control (Raspberry Pi optimized)
-        self.keyboard_listener = RaspberryPiKeyboardListener(self.output_manager)
+        # Keyboard control
+        self.keyboard_listener = QuietKeyboardListener(self.output_manager)
         self.detection_requested = False
         self.detection_in_progress = False
         
@@ -183,29 +181,32 @@ class WasteDisposalSystem:
     def _initialize_system(self):
         """Initialize all system components"""
         try:
-            self.output_manager.print_message("Initializing waste disposal system...")
+            self.output_manager.print_init_message("Initializing waste disposal system...")
             
             # Initialize PPE detector (preload)
-            self.output_manager.print_message("Loading PPE detection model...")
+            self.output_manager.print_init_message("Loading PPE detection model...")
             self.ppe_detector = PPEDetector()
-            self.output_manager.print_message("PPE detector loaded and ready!")
+            self.output_manager.print_init_message("PPE detector loaded")
             
             # Initialize servo controller
             self.servo_controller = ServoController()
-            self.output_manager.print_message("Servo controller initialized")
+            self.output_manager.print_init_message("Servo controller initialized")
             
             # Initialize camera
             self._initialize_camera()
-            self.output_manager.print_message("Camera initialized")
+            self.output_manager.print_init_message("Camera initialized")
             
             # Start keyboard listener
             self.keyboard_listener.start()
             
-            self.output_manager.print_message("System ready!")
-            self._show_controls()
+            self.output_manager.print_init_message("System ready!")
+            
+            # 초기화 완료 - 이제 화면 고정
+            self.output_manager.mark_initialization_complete()
+            self._show_final_interface()
             
         except Exception as e:
-            self.output_manager.print_message(f"System initialization failed: {e}", "ERROR")
+            self.output_manager.print_init_message(f"System initialization failed: {e}", "ERROR")
             self.cleanup()
             raise
     
@@ -221,22 +222,24 @@ class WasteDisposalSystem:
             time.sleep(2)
             
         except Exception as e:
-            self.output_manager.print_message(f"Camera initialization failed: {e}", "ERROR")
+            self.output_manager.print_init_message(f"Camera initialization failed: {e}", "ERROR")
             raise
     
-    def _show_controls(self):
-        """컨트롤 안내 출력"""
-        print("\n" + "="*60)
+    def _show_final_interface(self):
+        """최종 인터페이스 표시 (고정)"""
+        print("\n" + "="*70)
+        print("WASTE DISPOSAL SYSTEM - READY")
+        print("="*70)
         print("KEYBOARD CONTROLS:")
         print("  SPACE - Start PPE detection")
         print("  R     - Reset detection session")
-        print("  S     - Show current status")
+        print("  S     - Show detailed status")
         print("  H     - Show help")
         print("  Q     - Quit system")
-        print("="*60)
-        print("System ready - press SPACE to start PPE detection")
-        print("Status updates will appear below:")
-        print("-"*60)
+        print("="*70)
+        print("System is ready. Press SPACE to start PPE detection.")
+        print("Status will be shown below:")
+        print("-"*70)
     
     def _handle_keyboard_input(self):
         """Handle keyboard input"""
@@ -259,10 +262,10 @@ class WasteDisposalSystem:
                 self.output_manager.print_key_action("DETECTION RESET")
                 
             elif char.lower() == 'h':  # H key for help
-                self._show_controls()
+                self._show_help_overlay()
                 
             elif char.lower() == 's':  # S key for status
-                self._print_detailed_status()
+                self._show_detailed_status()
                 
     def _reset_detection(self):
         """Reset detection session"""
@@ -273,12 +276,24 @@ class WasteDisposalSystem:
             self.servo_controller.close_door()
             self.door_open_time = None
     
-    def _print_detailed_status(self):
-        """상세 상태 출력"""
-        stats = self.get_statistics()
+    def _show_help_overlay(self):
+        """도움말 오버레이 (기존 화면 유지)"""
         print(f"\n" + "="*50)
-        print("DETAILED SYSTEM STATUS")
+        print("HELP - KEYBOARD CONTROLS")
         print("="*50)
+        print("SPACE - Start PPE detection")
+        print("R     - Reset detection session")
+        print("S     - Show detailed status")
+        print("H     - Show this help")
+        print("Q     - Quit system")
+        print("="*50)
+    
+    def _show_detailed_status(self):
+        """상세 상태 출력 (오버레이 형식)"""
+        stats = self.get_statistics()
+        print(f"\n" + "="*60)
+        print("DETAILED SYSTEM STATUS")
+        print("="*60)
         print(f"Runtime: {stats['runtime_seconds']:.1f} seconds")
         print(f"Processed frames: {stats['total_frames']}")
         print(f"Detection count: {stats['detection_count']}")
@@ -286,30 +301,26 @@ class WasteDisposalSystem:
         print(f"Current FPS: {stats['current_fps']:.1f}")
         print(f"Door state: {stats['door_state']}")
         print(f"Detection active: {'Yes' if stats['detection_active'] else 'No'}")
-        print("="*50)
+        print(f"Detection sessions: {stats['detection_sessions']}")
+        print("="*60)
     
     def _should_run_inference(self) -> tuple[bool, str]:
         """Determine if inference should run"""
         
-        # 1. Door open - stop inference for servo stability
         if self.servo_controller.is_door_open():
             return False, "Door open"
         
-        # 2. Door moving - wait for completion
         if self.servo_controller.get_door_state() == DoorState.MOVING:
             return False, "Door moving"
         
-        # 3. User requested and not in progress
         if self.detection_requested and not self.detection_in_progress:
             self.detection_in_progress = True
-            self.detection_requested = False  # Start only once
+            self.detection_requested = False
             return True, "Detection active"
         
-        # 4. Already in progress - continue
         if self.detection_in_progress:
             return True, "Detection active"
         
-        # 5. Default waiting state
         return False, "Waiting for SPACE"
     
     def _process_frame(self, frame: np.ndarray) -> Dict[str, Any]:
@@ -317,11 +328,9 @@ class WasteDisposalSystem:
         self.frame_count += 1
         self.stats['total_frames'] += 1
         
-        # Check if inference should run
         should_run, reason = self._should_run_inference()
         
         if not should_run:
-            # Return empty result without inference
             return {
                 'detections': [],
                 'is_compliant': False,
@@ -331,15 +340,13 @@ class WasteDisposalSystem:
                 'status_reason': reason
             }
         
-        # Fast PPE detection (model already loaded)
         start_time = time.time()
         detections = self.ppe_detector.detect(frame, CONFIDENCE_THRESHOLD)
-        inference_time = (time.time() - start_time) * 1000  # ms
+        inference_time = (time.time() - start_time) * 1000
         
         if detections:
             self.stats['detection_count'] += 1
         
-        # Check PPE compliance
         is_compliant, ppe_status = self.ppe_detector.check_ppe_compliance(detections)
         
         return {
@@ -354,7 +361,6 @@ class WasteDisposalSystem:
     
     def _handle_compliance_state(self, result: Dict[str, Any], current_time: float):
         """Handle PPE compliance state changes"""
-        # Only process when inference is active
         if not result.get('inference_active', False):
             return
         
@@ -367,7 +373,6 @@ class WasteDisposalSystem:
             
             compliance_duration = current_time - self.compliance_start_time
             
-            # Open door when compliance achieved
             if (compliance_duration >= PPE_CHECK_DURATION and 
                 self.servo_controller.is_door_closed()):
                 
@@ -376,7 +381,7 @@ class WasteDisposalSystem:
                     self.door_open_time = current_time
                     self.stats['door_openings'] += 1
                     self.stats['compliance_events'] += 1
-                    self.detection_in_progress = False  # End detection session
+                    self.detection_in_progress = False
                     self.output_manager.print_key_action("DOOR OPENED - DETECTION COMPLETE")
         else:
             if self.compliance_start_time is not None:
@@ -390,13 +395,11 @@ class WasteDisposalSystem:
             
             door_open_duration = current_time - self.door_open_time
             
-            # Warning messages
             if door_open_duration >= DOOR_OPEN_DURATION - 3 and door_open_duration < DOOR_OPEN_DURATION:
                 remaining = DOOR_OPEN_DURATION - door_open_duration
-                if int(remaining * 2) % 2 == 0:  # Every 0.5 seconds
+                if int(remaining * 2) % 2 == 0:
                     self.output_manager.print_key_action(f"WARNING: Door closes in {remaining:.1f}s")
             
-            # Auto close
             if door_open_duration >= DOOR_OPEN_DURATION:
                 self.output_manager.print_key_action("AUTO-CLOSING DOOR")
                 if self.servo_controller.close_door():
@@ -425,7 +428,7 @@ class WasteDisposalSystem:
         # FPS
         status_parts.append(f"FPS:{self.fps:.1f}")
         
-        # Door state
+        # Door state  
         door_state = self.servo_controller.get_door_state().value
         door_symbol = "OPEN" if door_state == "open" else "CLOSED"
         status_parts.append(f"Door:{door_symbol}")
@@ -473,37 +476,23 @@ class WasteDisposalSystem:
             while not self.stop_event.is_set():
                 current_time = time.time()
                 
-                # Handle keyboard input
                 self._handle_keyboard_input()
-                
-                # Always capture frame (lightweight)
                 frame = self.camera.capture_array()
-                
-                # Smart processing (conditional inference)
                 result = self._process_frame(frame)
-                
-                # Handle compliance state
                 self._handle_compliance_state(result, current_time)
-                
-                # Handle door timeout
                 self._handle_door_timeout(current_time)
-                
-                # Update FPS
                 self._update_fps(current_time)
-                
-                # Update status display (깔끔한 한 줄 업데이트)
                 self._update_status_display(result, current_time)
                 
-                # Smart delay
                 if result.get('inference_active', False):
-                    time.sleep(0.05)  # Fast when active
+                    time.sleep(0.05)
                 else:
-                    time.sleep(0.2)   # Slow when waiting
+                    time.sleep(0.2)
         
         except KeyboardInterrupt:
             self.output_manager.print_key_action("CTRL+C DETECTED - SHUTTING DOWN")
         except Exception as e:
-            self.output_manager.print_message(f"System error: {e}", "ERROR")
+            print(f"\nSYSTEM ERROR: {e}")
             import traceback
             traceback.print_exc()
         finally:
@@ -523,25 +512,21 @@ class WasteDisposalSystem:
     def cleanup(self):
         """Clean up system resources"""
         try:
-            # Close door if open
             if self.servo_controller and self.servo_controller.is_door_open():
                 self.servo_controller.close_door()
             
-            # Clean up servo
             if self.servo_controller:
                 self.servo_controller.cleanup()
             
-            # Stop camera
             if self.camera:
                 self.camera.stop()
             
-            # Stop keyboard listener
             self.keyboard_listener.stop()
             
-            self.output_manager.print_message("System cleanup completed")
+            print("\nSystem cleanup completed")
             
         except Exception as e:
-            self.output_manager.print_message(f"Cleanup error: {e}", "ERROR")
+            print(f"Cleanup error: {e}")
     
     def get_statistics(self) -> Dict[str, Any]:
         """Get system statistics"""
@@ -557,61 +542,12 @@ class WasteDisposalSystem:
             'compliance_duration': (current_time - self.compliance_start_time) if self.compliance_start_time else 0,
             'detection_active': self.detection_in_progress
         }
-    
-    def emergency_stop(self):
-        """Emergency stop"""
-        self.output_manager.print_key_action("EMERGENCY STOP ACTIVATED")
-        
-        if self.servo_controller:
-            self.servo_controller.emergency_stop()
-        
-        self.stop()
-
-# ==========================================
-# 키보드 테스트 (깔끔한 출력)
-# ==========================================
-
-def test_keyboard_only():
-    """키보드 입력만 테스트 (깔끔한 출력)"""
-    print("=" * 50)
-    print("RASPBERRY PI KEYBOARD TEST - CLEAN OUTPUT")
-    print("=" * 50)
-    print("Press keys to test. Press 'q' to quit.")
-    print("-" * 50)
-    
-    output_manager = CleanOutputManager()
-    listener = RaspberryPiKeyboardListener(output_manager)
-    listener.start()
-    
-    try:
-        while True:
-            char = listener.get_char()
-            if char:
-                output_manager.print_message(f"Key pressed: '{char}' (ASCII: {ord(char)})")
-                if char.lower() == 'q':
-                    output_manager.print_message("Quit requested")
-                    break
-            
-            # 상태 업데이트 테스트
-            output_manager.print_status(f"Waiting for input... Time: {time.strftime('%H:%M:%S')}")
-            time.sleep(0.1)
-            
-    except KeyboardInterrupt:
-        output_manager.print_message("Ctrl+C detected", "WARNING")
-    finally:
-        listener.stop()
-        print("\nKeyboard test completed")
 
 if __name__ == "__main__":
-    import sys
-    
-    if len(sys.argv) > 1 and sys.argv[1] == "keyboard-test":
-        test_keyboard_only()
-    else:
-        try:
-            system = WasteDisposalSystem()
-            system.run()
-        except Exception as e:
-            print(f"System failed to start: {e}")
-            import traceback
-            traceback.print_exc()
+    try:
+        system = WasteDisposalSystem()
+        system.run()
+    except Exception as e:
+        print(f"System failed to start: {e}")
+        import traceback
+        traceback.print_exc()
