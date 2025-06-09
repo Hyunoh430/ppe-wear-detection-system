@@ -97,20 +97,23 @@ class ServoController:
             
             try:
                 if smooth:
-                    # 부드러운 이동: 100도 → 70도 (빠르게)
-                    for deg in range(int(SERVO_CLOSED_ANGLE), int(SERVO_OPEN_ANGLE) - 1, -1):
+                    # 부드러운 이동: 100도 → 70도 (빠르게) - 고정값 사용
+                    self.logger.info("Moving from 100° to 70°...")
+                    for deg in range(100, 69, -1):  # 명시적으로 100에서 70으로
                         duty = self._calculate_duty_cycle(deg)
                         self.servo.ChangeDutyCycle(duty)
                         time.sleep(0.005)  # 빠른 속도
+                    self.logger.info("Movement completed")
                 else:
                     # 직접 이동
                     self._move_to_angle_direct(SERVO_OPEN_ANGLE)
                 
                 # 최종 위치에서 계속 힘을 가함 (홀드)
-                final_duty = self._calculate_duty_cycle(SERVO_OPEN_ANGLE)
+                final_duty = self._calculate_duty_cycle(70)  # 명시적으로 70도
                 self.servo.ChangeDutyCycle(final_duty)
+                self.logger.info(f"Holding at 70° with duty cycle: {final_duty:.2f}")
                 
-                self.current_angle = SERVO_OPEN_ANGLE
+                self.current_angle = 70
                 self.state = DoorState.OPEN
                 
                 self.logger.info(f"Door opened successfully (angle: {self.current_angle}°) - holding position")
@@ -137,11 +140,13 @@ class ServoController:
             
             try:
                 if smooth:
-                    # 부드러운 이동: 70도 → 100도 (천천히)
-                    for deg in range(int(SERVO_OPEN_ANGLE), int(SERVO_CLOSED_ANGLE) + 1):
+                    # 부드러운 이동: 70도 → 100도 (천천히) - 고정값 사용
+                    self.logger.info("Moving from 70° to 100°...")
+                    for deg in range(70, 101):  # 명시적으로 70에서 100으로
                         duty = self._calculate_duty_cycle(deg)
                         self.servo.ChangeDutyCycle(duty)
                         time.sleep(0.03)  # 느린 속도
+                    self.logger.info("Movement completed")
                 else:
                     # 직접 이동
                     self._move_to_angle_direct(SERVO_CLOSED_ANGLE)
@@ -149,8 +154,9 @@ class ServoController:
                 # 닫힌 후에는 모터 정지
                 time.sleep(0.5)  # 완전 닫힘 대기
                 self.servo.ChangeDutyCycle(0)  # PWM 정지
+                self.logger.info("Motor stopped")
                 
-                self.current_angle = SERVO_CLOSED_ANGLE
+                self.current_angle = 100
                 self.state = DoorState.CLOSED
                 
                 self.logger.info(f"Door closed successfully (angle: {self.current_angle}°) - motor stopped")
