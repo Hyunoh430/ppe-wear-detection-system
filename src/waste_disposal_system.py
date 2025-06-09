@@ -1,5 +1,6 @@
 """
 Main waste disposal system with keyboard-triggered smart inference control
+Located at: src/waste_disposal_system.py
 """
 
 import time
@@ -13,7 +14,7 @@ import sys
 import tty
 import termios
 
-from config import *
+from config import *  
 from ppe_detector import PPEDetector
 from servo_controller import ServoController, DoorState
 
