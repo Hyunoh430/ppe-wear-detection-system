@@ -1,5 +1,5 @@
 """
-Servo motor controller for waste disposal door - Simplified version
+Servo motor controller - Fixed for main.py integration
 """
 
 import RPi.GPIO as GPIO
@@ -29,6 +29,11 @@ class ServoController:
         self.is_initialized = False
         self.movement_lock = threading.Lock()
         
+        # PWM 유지를 위한 추가 변수들
+        self.hold_thread: Optional[threading.Thread] = None
+        self.should_hold = False
+        self.hold_angle = None
+        
         self._initialize_gpio()
     
     def _initialize_gpio(self):
@@ -57,24 +62,60 @@ class ServoController:
             raise
     
     def _calculate_duty_cycle(self, angle: float) -> float:
-        """Calculate PWM duty cycle for given angle"""
+        """Calculate PWM duty cycle for given angle - 하드코딩으로 안정성 확보"""
         if angle < 0:
             angle = 0
         elif angle > 180:
             angle = 180
         
+        # 테스트 코드와 동일한 값 사용
+        SERVO_MIN_DUTY = 3
+        SERVO_MAX_DUTY = 12
         duty = SERVO_MIN_DUTY + (angle * (SERVO_MAX_DUTY - SERVO_MIN_DUTY) / 180.0)
         return duty
     
+    def _hold_position_thread(self):
+        """별도 스레드에서 위치 유지 (main.py 간섭 방지)"""
+        self.logger.info(f"Starting position hold thread for {self.hold_angle}°")
+        
+        while self.should_hold and self.is_initialized:
+            try:
+                if self.servo and self.hold_angle is not None:
+                    duty = self._calculate_duty_cycle(self.hold_angle)
+                    self.servo.ChangeDutyCycle(duty)
+                time.sleep(0.1)  # 0.1초마다 PWM 신호 재전송
+            except Exception as e:
+                self.logger.error(f"Hold position thread error: {e}")
+                break
+        
+        self.logger.info("Position hold thread stopped")
+    
+    def _start_holding_position(self, angle: float):
+        """위치 유지 시작"""
+        self._stop_holding_position()  # 기존 홀드 중지
+        
+        self.hold_angle = angle
+        self.should_hold = True
+        self.hold_thread = threading.Thread(target=self._hold_position_thread, daemon=True)
+        self.hold_thread.start()
+    
+    def _stop_holding_position(self):
+        """위치 유지 중지"""
+        self.should_hold = False
+        if self.hold_thread and self.hold_thread.is_alive():
+            self.hold_thread.join(timeout=1.0)
+        self.hold_thread = None
+        self.hold_angle = None
+    
     def _move_to_angle_direct(self, angle: float):
-        """Move servo directly to angle (simple version)"""
+        """Move servo directly to angle"""
         if not self.is_initialized or self.servo is None:
             return False
         
         try:
             duty = self._calculate_duty_cycle(angle)
             self.servo.ChangeDutyCycle(duty)
-            time.sleep(0.8)  # 좀 더 긴 이동 완료 대기
+            time.sleep(0.8)
             self.current_angle = angle
             return True
         except Exception as e:
@@ -95,29 +136,27 @@ class ServoController:
             self.logger.info("Opening waste disposal door...")
             self.state = DoorState.MOVING
             
+            # 기존 홀드 중지
+            self._stop_holding_position()
+            
             try:
                 if smooth:
-                    # 부드러운 이동: 100도 → 70도 (빠르게) - 고정값 사용
+                    # 부드러운 이동: 100도 → 70도 (빠르게)
                     self.logger.info("Moving from 100° to 70°...")
-                    for deg in range(100, 69, -1):  # 명시적으로 100에서 70으로
+                    for deg in range(100, 69, -1):
                         duty = self._calculate_duty_cycle(deg)
                         self.servo.ChangeDutyCycle(duty)
-                        time.sleep(0.005)  # 빠른 속도
+                        time.sleep(0.005)
                     self.logger.info("Movement completed")
                 else:
-                    # 직접 이동
-                    self._move_to_angle_direct(SERVO_OPEN_ANGLE)
+                    self._move_to_angle_direct(70)
                 
-                # 최종 위치 설정 후 안정화
-                final_duty = self._calculate_duty_cycle(70)  # 명시적으로 70도
-                self.servo.ChangeDutyCycle(final_duty)
-                time.sleep(0.2)  # 안정화 시간
-                self.logger.info(f"Door at 70° with duty cycle: {final_duty:.2f} - holding position")
-                
+                # 위치 유지 스레드 시작
                 self.current_angle = 70
                 self.state = DoorState.OPEN
+                self._start_holding_position(70)
                 
-                self.logger.info(f"Door opened successfully (angle: {self.current_angle}°) - holding position")
+                self.logger.info("Door opened successfully - holding position with dedicated thread")
                 return True
                 
             except Exception as e:
@@ -139,28 +178,30 @@ class ServoController:
             self.logger.info("Closing waste disposal door...")
             self.state = DoorState.MOVING
             
+            # 홀드 중지
+            self._stop_holding_position()
+            
             try:
                 if smooth:
-                    # 부드러운 이동: 70도 → 100도 (천천히) - 고정값 사용
+                    # 부드러운 이동: 70도 → 100도 (천천히)
                     self.logger.info("Moving from 70° to 100°...")
-                    for deg in range(70, 101):  # 명시적으로 70에서 100으로
+                    for deg in range(70, 101):
                         duty = self._calculate_duty_cycle(deg)
                         self.servo.ChangeDutyCycle(duty)
-                        time.sleep(0.03)  # 느린 속도
+                        time.sleep(0.03)
                     self.logger.info("Movement completed")
                 else:
-                    # 직접 이동
-                    self._move_to_angle_direct(SERVO_CLOSED_ANGLE)
+                    self._move_to_angle_direct(100)
                 
                 # 닫힌 후에는 모터 정지
-                time.sleep(0.5)  # 완전 닫힘 대기
-                self.servo.ChangeDutyCycle(0)  # PWM 정지
+                time.sleep(0.5)
+                self.servo.ChangeDutyCycle(0)
                 self.logger.info("Motor stopped")
                 
                 self.current_angle = 100
                 self.state = DoorState.CLOSED
                 
-                self.logger.info(f"Door closed successfully (angle: {self.current_angle}°) - motor stopped")
+                self.logger.info("Door closed successfully - motor stopped")
                 return True
                 
             except Exception as e:
@@ -169,36 +210,36 @@ class ServoController:
                 return False
     
     def emergency_stop(self):
-        """Emergency stop - immediately stop servo movement"""
+        """Emergency stop"""
         try:
+            self._stop_holding_position()  # 홀드 스레드 중지
             if self.servo:
-                self.servo.ChangeDutyCycle(0)  # Stop PWM signal
+                self.servo.ChangeDutyCycle(0)
             self.state = DoorState.ERROR
             self.logger.warning("Emergency stop activated")
         except Exception as e:
             self.logger.error(f"Emergency stop failed: {e}")
     
     def get_door_state(self) -> DoorState:
-        """Get current door state"""
         return self.state
     
     def get_current_angle(self) -> float:
-        """Get current servo angle"""
         return self.current_angle
     
     def is_door_open(self) -> bool:
-        """Check if door is open"""
         return self.state == DoorState.OPEN
     
     def is_door_closed(self) -> bool:
-        """Check if door is closed"""
         return self.state == DoorState.CLOSED
     
     def test_movement(self) -> bool:
-        """Test servo movement - 당신의 테스트 코드와 동일한 방식"""
+        """Test servo movement"""
         self.logger.info("Testing servo movement...")
         
         try:
+            # 기존 홀드 중지
+            self._stop_holding_position()
+            
             # Open: 100 → 70 (fast)
             self.logger.info("Opening door (100° → 70°)...")
             for deg in range(100, 69, -1):
@@ -206,11 +247,11 @@ class ServoController:
                 self.servo.ChangeDutyCycle(duty)
                 time.sleep(0.005)
             
-            # Hold at 70 degrees for 3 seconds
+            # Hold at 70 degrees for 3 seconds with thread
             self.logger.info("Holding at 70° for 3 seconds...")
-            hold_duty = self._calculate_duty_cycle(70)
-            self.servo.ChangeDutyCycle(hold_duty)
+            self._start_holding_position(70)
             time.sleep(3.0)
+            self._stop_holding_position()
             
             # Close: 70 → 100 (slow)
             self.logger.info("Closing door (70° → 100°)...")
@@ -235,8 +276,10 @@ class ServoController:
     def cleanup(self):
         """Clean up GPIO resources"""
         try:
+            # 홀드 스레드 중지
+            self._stop_holding_position()
+            
             if self.servo:
-                # Stop PWM before cleanup
                 self.servo.ChangeDutyCycle(0)
                 self.servo.stop()
             GPIO.cleanup()
@@ -246,13 +289,10 @@ class ServoController:
             self.logger.error(f"Cleanup failed: {e}")
     
     def __enter__(self):
-        """Context manager entry"""
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit"""
         self.cleanup()
-
 
 # ==========================================
 # 간단한 테스트 코드
