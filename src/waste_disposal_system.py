@@ -131,16 +131,13 @@ class WasteDisposalSystem:
             raise
     
     def _show_interface(self):
-        """인터페이스 한 번만 출력"""
+        """인터페이스 한 번만 출력 (텍스트만)"""
         # 화면 지우기
         print('\033[2J\033[H', end='')
         
-        print("=" * 40)
         print("PPE WASTE DISPOSAL SYSTEM")
-        print("=" * 40)
         print("Press SPACE to start PPE detection")
         print("Press Q to quit")
-        print("=" * 40)
         print("")
     
     def _handle_keyboard_input(self):
