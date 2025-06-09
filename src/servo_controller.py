@@ -99,7 +99,7 @@ class ServoController:
                 if smooth:
                     # 부드러운 이동: 100도 → 70도 (빠르게) - 고정값 사용
                     self.logger.info("Moving from 100° to 70°...")
-                    for deg in range(100, 69, -1):  # 명시적으로 100에서 70으로
+                    for deg in range(100, 59, -1):  # 명시적으로 100에서 70으로
                         duty = self._calculate_duty_cycle(deg)
                         self.servo.ChangeDutyCycle(duty)
                         time.sleep(0.005)  # 빠른 속도
