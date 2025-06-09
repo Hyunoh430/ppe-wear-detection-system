@@ -131,12 +131,16 @@ class VideoStreamer:
         self.connected = False
         self.streaming = False
     
-    def send_frame(self, frame: np.ndarray):
+    def send_frame(self, frame: np.ndarray, quiet_mode: bool = False):
         """프레임 전송"""
         if not self.connected:
             return False
         
         try:
+            # 추론 중일 때는 모든 출력 차단
+            if quiet_mode:
+                silence_all_output()
+            
             # JPEG 압축
             encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
             _, buffer = cv2.imencode('.jpg', frame, encode_param)
@@ -149,8 +153,13 @@ class VideoStreamer:
             # 실제 프레임 데이터 전송
             self.socket.sendall(data)
             
+            if quiet_mode:
+                restore_output()
+            
             return True
         except Exception as e:
+            if quiet_mode:
+                restore_output()
             self.disconnect()
             return False
     
@@ -296,9 +305,9 @@ class WasteDisposalSystem:
                 if not self.video_streamer.streaming:
                     self.video_streamer.start_streaming()
                 
-                # 프레임 전송
+                # 프레임 전송 (일반 모드 - 로그 출력 허용)
                 if self.video_streamer.streaming:
-                    if self.video_streamer.send_frame(frame):
+                    if self.video_streamer.send_frame(frame, quiet_mode=False):
                         self.stats['frames_streamed'] += 1
         
         if not should_run:
@@ -389,14 +398,14 @@ class WasteDisposalSystem:
         # 감지/스트리밍 상태
         status_parts.append(f"Mode:{result.get('status_reason', 'Unknown')}")
         
-        # 영상 스트리밍 상태
-        if self.video_streamer:
+        # 영상 스트리밍 상태 (추론 중이 아닐 때만 표시)
+        if self.video_streamer and not result.get('inference_active', False):
             stream_status = "ON" if self.video_streamer.streaming else "OFF"
             conn_status = "CONN" if self.video_streamer.connected else "DISC"
             status_parts.append(f"Stream:{stream_status}({conn_status})")
             status_parts.append(f"Sent:{self.stats['frames_streamed']}")
         
-        # 감지된 PPE
+        # 감지된 PPE (추론 중일 때만)
         if result.get('inference_active', False) and result['detections']:
             detected_items = []
             for det in result['detections']:
@@ -407,7 +416,7 @@ class WasteDisposalSystem:
         elif result.get('inference_active', False):
             status_parts.append("Found: None")
         
-        # PPE 준수 상태
+        # PPE 준수 상태 (추론 중일 때만)
         if result.get('inference_active', False):
             if result['is_compliant']:
                 if self.compliance_start_time:
