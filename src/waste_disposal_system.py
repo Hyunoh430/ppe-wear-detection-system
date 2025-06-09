@@ -257,7 +257,7 @@ class WasteDisposalSystem:
                 self._log_status(result, current_time)
                 
                 # Small delay to prevent excessive CPU usage
-                time.sleep(0.01)
+                time.sleep(0.1)
         
         except KeyboardInterrupt:
             self.logger.info("Shutdown requested by user")
