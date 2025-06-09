@@ -107,9 +107,9 @@ class WasteDisposalSystem:
         self._initialize_system()
     
     def _initialize_system(self):
-        """시스템 초기화 - 최소한의 출력만"""
+        """시스템 초기화 - 아무 출력 없이"""
         try:
-            # 아무 메시지 없이 초기화
+            # 완전히 조용히 초기화
             self.ppe_detector = PPEDetector()
             self.servo_controller = ServoController()
             
@@ -123,39 +123,32 @@ class WasteDisposalSystem:
             
             self.keyboard_listener.start()
             
-            # 한 번만 간단히 출력하고 끝
-            self._show_interface()
+            # 아무것도 출력하지 않음!
             
         except Exception as e:
             print(f"Error: {e}")
             raise
     
     def _show_interface(self):
-        """인터페이스 한 번만 출력 (텍스트만)"""
-        # 화면 지우기
-        print('\033[2J\033[H', end='')
-        
-        print("PPE WASTE DISPOSAL SYSTEM")
-        print("Press SPACE to start PPE detection")
-        print("Press Q to quit")
-        print("")
+        """사용하지 않음 - 아무것도 출력하지 않음"""
+        pass
     
     def _handle_keyboard_input(self):
-        """키보드 입력 처리"""
+        """키보드 입력 처리 - 아무것도 출력하지 않음"""
         char = self.keyboard_listener.get_char()
         if char:
             if char == ' ':  # SPACE
                 if not self.detection_in_progress:
                     self.detection_requested = True
-                    print("Detection Started")
+                    # 아무것도 출력하지 않음
                     
             elif char.lower() == 'q':  # Q
-                print("Quitting...")
+                # 아무것도 출력하지 않음
                 self.stop_event.set()
                 
             elif char.lower() == 'r':  # R (리셋)
                 self._reset_detection()
-                print("Reset")
+                # 아무것도 출력하지 않음
     
     def _reset_detection(self):
         """감지 리셋"""
@@ -215,7 +208,7 @@ class WasteDisposalSystem:
         }
     
     def _handle_compliance_state(self, result: Dict[str, Any], current_time: float):
-        """준수 상태 처리"""
+        """준수 상태 처리 - 아무것도 출력하지 않음"""
         if not result.get('inference_active', False):
             return
         
@@ -224,39 +217,36 @@ class WasteDisposalSystem:
         if is_compliant:
             if self.compliance_start_time is None:
                 self.compliance_start_time = current_time
-                print("PPE OK - Timer Started")
+                # 아무것도 출력하지 않음
             
             duration = current_time - self.compliance_start_time
             
             if duration >= PPE_CHECK_DURATION and self.servo_controller.is_door_closed():
-                print(f"Opening Door - PPE OK {duration:.1f}s")
+                # 아무것도 출력하지 않음
                 if self.servo_controller.open_door():
                     self.door_open_time = current_time
                     self.stats['door_openings'] += 1
                     self.detection_in_progress = False
-                    print("Door Opened")
+                    # 아무것도 출력하지 않음
         else:
             if self.compliance_start_time is not None:
-                print("PPE Lost")
+                # 아무것도 출력하지 않음
                 self.compliance_start_time = None
     
     def _handle_door_timeout(self, current_time: float):
-        """문 타임아웃 처리"""
+        """문 타임아웃 처리 - 아무것도 출력하지 않음"""
         if self.door_open_time and self.servo_controller.is_door_open():
             duration = current_time - self.door_open_time
             
-            if duration >= DOOR_OPEN_DURATION - 2 and duration < DOOR_OPEN_DURATION:
-                remaining = DOOR_OPEN_DURATION - duration
-                if int(remaining * 2) % 2 == 0:
-                    print(f"Door closes in {remaining:.1f}s")
+            # 경고 메시지도 출력하지 않음
             
             if duration >= DOOR_OPEN_DURATION:
-                print("Closing Door")
+                # 아무것도 출력하지 않음
                 if self.servo_controller.close_door():
                     self.door_open_time = None
                     self.compliance_start_time = None
                     self.detection_in_progress = False
-                    print("Ready")
+                    # 아무것도 출력하지 않음
     
     def _update_fps(self, current_time: float):
         """FPS 업데이트"""
@@ -348,7 +338,7 @@ class WasteDisposalSystem:
                     time.sleep(0.2)
         
         except KeyboardInterrupt:
-            print("\nCtrl+C - Shutting down")
+            print("\nShutting down")
         except Exception as e:
             print(f"\nError: {e}")
         finally:
@@ -356,7 +346,6 @@ class WasteDisposalSystem:
     
     def stop(self):
         """시스템 중지"""
-        print("\nStopping...")
         self.stop_event.set()
         self.is_running = False
         self.cleanup()
@@ -375,10 +364,8 @@ class WasteDisposalSystem:
             
             self.keyboard_listener.stop()
             
-            print("Done")
-            
         except Exception as e:
-            print(f"Cleanup error: {e}")
+            pass  # 에러도 출력하지 않음
 
 if __name__ == "__main__":
     try:
