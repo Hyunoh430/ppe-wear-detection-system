@@ -80,7 +80,7 @@ class WasteDisposalSystem:
         self.last_log_time = 0
         self.frame_count = 0
         self.fps = 0
-        
+        self.inference_active = False 
         # Threading
         self.main_thread: Optional[threading.Thread] = None
         self.stop_event = threading.Event()
