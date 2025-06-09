@@ -1,4 +1,5 @@
-"""
+def _initialize_system(self):
+        """시스템 초기화 - 모든 출력 차단""""""
 로그 밀림 문제 완전 해결 버전
 모든 불필요한 출력 제거
 """
@@ -9,6 +10,7 @@ import logging
 import sys
 import termios
 import tty
+import os
 from typing import Optional, Dict, Any
 from picamera2 import Picamera2
 import numpy as np
@@ -17,10 +19,33 @@ from config import *
 from ppe_detector import PPEDetector
 from servo_controller import ServoController, DoorState
 
-# 로깅 완전 비활성화
-logging.getLogger().setLevel(logging.CRITICAL)
-logging.getLogger('picamera2').setLevel(logging.CRITICAL)
-logging.getLogger('libcamera').setLevel(logging.CRITICAL)
+# 모든 로깅 완전 차단
+logging.getLogger().setLevel(logging.CRITICAL + 1)
+logging.getLogger('picamera2').setLevel(logging.CRITICAL + 1)
+logging.getLogger('libcamera').setLevel(logging.CRITICAL + 1)
+logging.getLogger('tensorflow').setLevel(logging.CRITICAL + 1)
+logging.getLogger('tflite_runtime').setLevel(logging.CRITICAL + 1)
+logging.getLogger('RPi').setLevel(logging.CRITICAL + 1)
+logging.getLogger('GPIO').setLevel(logging.CRITICAL + 1)
+
+# stdout 백업 및 null 디바이스 준비
+original_stdout = sys.stdout
+original_stderr = sys.stderr
+
+class NullOutput:
+    """아무것도 출력하지 않는 클래스"""
+    def write(self, txt): pass
+    def flush(self): pass
+
+def silence_all_output():
+    """모든 출력 차단"""
+    sys.stdout = NullOutput()
+    sys.stderr = NullOutput()
+
+def restore_output():
+    """출력 복원"""
+    sys.stdout = original_stdout
+    sys.stderr = original_stderr
 
 class QuietKeyboardListener:
     """완전히 조용한 키보드 리스너"""
@@ -107,9 +132,12 @@ class WasteDisposalSystem:
         self._initialize_system()
     
     def _initialize_system(self):
-        """시스템 초기화 - 아무 출력 없이"""
+        """시스템 초기화 - 모든 출력 차단하고 초기화"""
         try:
-            # 완전히 조용히 초기화
+            # 모든 출력 차단
+            silence_all_output()
+            
+            # 조용히 초기화
             self.ppe_detector = PPEDetector()
             self.servo_controller = ServoController()
             
@@ -123,9 +151,11 @@ class WasteDisposalSystem:
             
             self.keyboard_listener.start()
             
-            # 아무것도 출력하지 않음!
+            # 출력 복원 (상태바만 나오게)
+            restore_output()
             
         except Exception as e:
+            restore_output()
             print(f"Error: {e}")
             raise
     
@@ -178,7 +208,7 @@ class WasteDisposalSystem:
         return False, "Press SPACE"
     
     def _process_frame(self, frame: np.ndarray) -> Dict[str, Any]:
-        """프레임 처리"""
+        """프레임 처리 - PPE 감지 시에도 출력 차단"""
         self.frame_count += 1
         self.stats['total_frames'] += 1
         
@@ -192,13 +222,23 @@ class WasteDisposalSystem:
                 'status_reason': reason
             }
         
-        # PPE 감지
-        detections = self.ppe_detector.detect(frame, CONFIDENCE_THRESHOLD)
-        if detections:
-            self.stats['detection_count'] += 1
+        # PPE 감지 시 출력 차단
+        silence_all_output()
         
-        # 준수 확인
-        is_compliant, ppe_status = self.ppe_detector.check_ppe_compliance(detections)
+        try:
+            # PPE 감지
+            detections = self.ppe_detector.detect(frame, CONFIDENCE_THRESHOLD)
+            if detections:
+                self.stats['detection_count'] += 1
+            
+            # 준수 확인
+            is_compliant, ppe_status = self.ppe_detector.check_ppe_compliance(detections)
+        except Exception as e:
+            detections = []
+            is_compliant = False
+        finally:
+            # 출력 복원
+            restore_output()
         
         return {
             'detections': detections,
