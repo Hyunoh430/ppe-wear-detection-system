@@ -1,7 +1,7 @@
-def _initialize_system(self):
-        """시스템 초기화 - 모든 출력 차단""""""
-로그 밀림 문제 완전 해결 버전
-모든 불필요한 출력 제거
+"""
+PPE 감지 + 영상 전송 통합 시스템
+- 유휴 상태: 영상 전송
+- PPE 감지 중: 영상 전송 중단
 """
 
 import time
@@ -11,6 +11,9 @@ import sys
 import termios
 import tty
 import os
+import socket
+import struct
+import cv2
 from typing import Optional, Dict, Any
 from picamera2 import Picamera2
 import numpy as np
@@ -96,8 +99,71 @@ class QuietKeyboardListener:
                 return char
         return None
 
+class VideoStreamer:
+    """영상 전송 클래스"""
+    
+    def __init__(self, target_ip: str = "172.20.10.4", port: int = 9999):
+        self.target_ip = target_ip
+        self.port = port
+        self.socket = None
+        self.connected = False
+        self.streaming = False
+        
+    def connect(self):
+        """컴퓨터에 연결"""
+        try:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket.connect((self.target_ip, self.port))
+            self.connected = True
+            return True
+        except Exception as e:
+            self.connected = False
+            return False
+    
+    def disconnect(self):
+        """연결 해제"""
+        if self.socket:
+            try:
+                self.socket.close()
+            except:
+                pass
+        self.socket = None
+        self.connected = False
+        self.streaming = False
+    
+    def send_frame(self, frame: np.ndarray):
+        """프레임 전송"""
+        if not self.connected:
+            return False
+        
+        try:
+            # JPEG 압축
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
+            _, buffer = cv2.imencode('.jpg', frame, encode_param)
+            data = buffer.tobytes()
+            
+            # 데이터 크기 먼저 전송
+            size = len(data)
+            self.socket.sendall(struct.pack('!I', size))
+            
+            # 실제 프레임 데이터 전송
+            self.socket.sendall(data)
+            
+            return True
+        except Exception as e:
+            self.disconnect()
+            return False
+    
+    def start_streaming(self):
+        """스트리밍 시작"""
+        self.streaming = True
+    
+    def stop_streaming(self):
+        """스트리밍 중지"""
+        self.streaming = False
+
 class WasteDisposalSystem:
-    def __init__(self):
+    def __init__(self, enable_video_streaming: bool = True, target_computer_ip: str = "172.20.10.4"):
         # 로거 완전 비활성화
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.CRITICAL)
@@ -107,6 +173,12 @@ class WasteDisposalSystem:
         self.servo_controller: Optional[ServoController] = None
         self.camera: Optional[Picamera2] = None
         self.keyboard_listener = QuietKeyboardListener()
+        
+        # 영상 스트리밍
+        self.enable_video_streaming = enable_video_streaming
+        self.video_streamer: Optional[VideoStreamer] = None
+        if enable_video_streaming:
+            self.video_streamer = VideoStreamer(target_computer_ip)
         
         # 상태 변수들
         self.is_running = False
@@ -127,6 +199,7 @@ class WasteDisposalSystem:
             'detection_count': 0,
             'door_openings': 0,
             'start_time': None,
+            'frames_streamed': 0,
         }
         
         self._initialize_system()
@@ -151,6 +224,11 @@ class WasteDisposalSystem:
             
             self.keyboard_listener.start()
             
+            # 영상 스트리밍 연결 시도
+            if self.video_streamer:
+                if self.video_streamer.connect():
+                    self.video_streamer.start_streaming()
+            
             # 출력 복원 (상태바만 나오게)
             restore_output()
             
@@ -159,26 +237,19 @@ class WasteDisposalSystem:
             print(f"Error: {e}")
             raise
     
-    def _show_interface(self):
-        """사용하지 않음 - 아무것도 출력하지 않음"""
-        pass
-    
     def _handle_keyboard_input(self):
-        """키보드 입력 처리 - 아무것도 출력하지 않음"""
+        """키보드 입력 처리"""
         char = self.keyboard_listener.get_char()
         if char:
             if char == ' ':  # SPACE
                 if not self.detection_in_progress:
                     self.detection_requested = True
-                    # 아무것도 출력하지 않음
                     
             elif char.lower() == 'q':  # Q
-                # 아무것도 출력하지 않음
                 self.stop_event.set()
                 
             elif char.lower() == 'r':  # R (리셋)
                 self._reset_detection()
-                # 아무것도 출력하지 않음
     
     def _reset_detection(self):
         """감지 리셋"""
@@ -205,14 +276,30 @@ class WasteDisposalSystem:
         if self.detection_in_progress:
             return True, "Active"
         
-        return False, "Press SPACE"
+        return False, "Streaming"  # 유휴 상태일 때는 스트리밍 중
     
     def _process_frame(self, frame: np.ndarray) -> Dict[str, Any]:
-        """프레임 처리 - PPE 감지 시에도 출력 차단"""
+        """프레임 처리 - PPE 감지 또는 영상 전송"""
         self.frame_count += 1
         self.stats['total_frames'] += 1
         
         should_run, reason = self._should_run_inference()
+        
+        # 영상 스트리밍 제어
+        if self.video_streamer:
+            if should_run:
+                # PPE 감지 중: 스트리밍 중지
+                if self.video_streamer.streaming:
+                    self.video_streamer.stop_streaming()
+            else:
+                # 유휴 상태: 스트리밍 시작/유지
+                if not self.video_streamer.streaming:
+                    self.video_streamer.start_streaming()
+                
+                # 프레임 전송
+                if self.video_streamer.streaming:
+                    if self.video_streamer.send_frame(frame):
+                        self.stats['frames_streamed'] += 1
         
         if not should_run:
             return {
@@ -248,7 +335,7 @@ class WasteDisposalSystem:
         }
     
     def _handle_compliance_state(self, result: Dict[str, Any], current_time: float):
-        """준수 상태 처리 - 아무것도 출력하지 않음"""
+        """준수 상태 처리"""
         if not result.get('inference_active', False):
             return
         
@@ -257,36 +344,28 @@ class WasteDisposalSystem:
         if is_compliant:
             if self.compliance_start_time is None:
                 self.compliance_start_time = current_time
-                # 아무것도 출력하지 않음
             
             duration = current_time - self.compliance_start_time
             
             if duration >= PPE_CHECK_DURATION and self.servo_controller.is_door_closed():
-                # 아무것도 출력하지 않음
                 if self.servo_controller.open_door():
                     self.door_open_time = current_time
                     self.stats['door_openings'] += 1
                     self.detection_in_progress = False
-                    # 아무것도 출력하지 않음
         else:
             if self.compliance_start_time is not None:
-                # 아무것도 출력하지 않음
                 self.compliance_start_time = None
     
     def _handle_door_timeout(self, current_time: float):
-        """문 타임아웃 처리 - 아무것도 출력하지 않음"""
+        """문 타임아웃 처리"""
         if self.door_open_time and self.servo_controller.is_door_open():
             duration = current_time - self.door_open_time
             
-            # 경고 메시지도 출력하지 않음
-            
             if duration >= DOOR_OPEN_DURATION:
-                # 아무것도 출력하지 않음
                 if self.servo_controller.close_door():
                     self.door_open_time = None
                     self.compliance_start_time = None
                     self.detection_in_progress = False
-                    # 아무것도 출력하지 않음
     
     def _update_fps(self, current_time: float):
         """FPS 업데이트"""
@@ -307,10 +386,17 @@ class WasteDisposalSystem:
         door_state = "OPEN" if self.servo_controller.is_door_open() else "CLOSED"
         status_parts.append(f"Door:{door_state}")
         
-        # 감지 상태
-        status_parts.append(f"Detection:{result.get('status_reason', 'Unknown')}")
+        # 감지/스트리밍 상태
+        status_parts.append(f"Mode:{result.get('status_reason', 'Unknown')}")
         
-        # 감지된 PPE (전체 표시)
+        # 영상 스트리밍 상태
+        if self.video_streamer:
+            stream_status = "ON" if self.video_streamer.streaming else "OFF"
+            conn_status = "CONN" if self.video_streamer.connected else "DISC"
+            status_parts.append(f"Stream:{stream_status}({conn_status})")
+            status_parts.append(f"Sent:{self.stats['frames_streamed']}")
+        
+        # 감지된 PPE
         if result.get('inference_active', False) and result['detections']:
             detected_items = []
             for det in result['detections']:
@@ -340,7 +426,7 @@ class WasteDisposalSystem:
         
         # 한 줄로 출력 (덮어쓰기)
         status_text = " | ".join(status_parts)
-        print(f'\r{status_text}' + ' ' * 10, end='', flush=True)
+        print(f'\r{status_text}' + ' ' * 20, end='', flush=True)
     
     def run(self):
         """메인 루프"""
@@ -355,7 +441,7 @@ class WasteDisposalSystem:
                 # 키보드 입력
                 self._handle_keyboard_input()
                 
-                # 프레임 처리
+                # 프레임 처리 (PPE 감지 또는 영상 전송)
                 frame = self.camera.capture_array()
                 result = self._process_frame(frame)
                 
@@ -373,9 +459,9 @@ class WasteDisposalSystem:
                 
                 # 딜레이
                 if result.get('inference_active', False):
-                    time.sleep(0.05)
+                    time.sleep(0.05)  # PPE 감지 중
                 else:
-                    time.sleep(0.2)
+                    time.sleep(0.1)   # 스트리밍 중 (더 빠름)
         
         except KeyboardInterrupt:
             print("\nShutting down")
@@ -393,6 +479,9 @@ class WasteDisposalSystem:
     def cleanup(self):
         """정리"""
         try:
+            if self.video_streamer:
+                self.video_streamer.disconnect()
+            
             if self.servo_controller and self.servo_controller.is_door_open():
                 self.servo_controller.close_door()
             
@@ -405,11 +494,21 @@ class WasteDisposalSystem:
             self.keyboard_listener.stop()
             
         except Exception as e:
-            pass  # 에러도 출력하지 않음
+            pass
 
 if __name__ == "__main__":
     try:
-        system = WasteDisposalSystem()
+        # 영상 스트리밍 활성화하여 시스템 시작
+        system = WasteDisposalSystem(
+            enable_video_streaming=True, 
+            target_computer_ip="172.20.10.4"  # 컴퓨터 IP
+        )
+        
+        print("Integrated PPE Detection + Video Streaming System")
+        print("Controls: SPACE=Start PPE Detection, R=Reset, Q=Quit")
+        print("Mode: Streaming when idle, PPE detection when active")
+        print("-" * 60)
+        
         system.run()
     except Exception as e:
         print(f"Failed: {e}")
