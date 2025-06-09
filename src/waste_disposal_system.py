@@ -14,9 +14,9 @@ import sys
 import tty
 import termios
 
-from .config import *  
-from .ppe_detector import PPEDetector
-from .servo_controller import ServoController, DoorState
+from config import *  
+from ppe_detector import PPEDetector
+from servo_controller import ServoController, DoorState
 
 class KeyboardListener:
     """Non-blocking keyboard input listener"""
