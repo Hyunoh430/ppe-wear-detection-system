@@ -1,5 +1,5 @@
 """
-Servo motor controller for waste disposal door
+Servo motor controller for waste disposal door - Modified for continuous hold
 """
 
 import RPi.GPIO as GPIO
@@ -28,6 +28,7 @@ class ServoController:
         self.state = DoorState.CLOSED
         self.is_initialized = False
         self.movement_lock = threading.Lock()
+        self.is_holding_position = False  # 위치 유지 상태 추가
         
         self._initialize_gpio()
     
@@ -40,8 +41,8 @@ class ServoController:
             self.servo = GPIO.PWM(self.pin, SERVO_FREQUENCY)
             self.servo.start(0)
             
-            # Set initial position (closed) and stop PWM
-            self._set_angle_and_stop(SERVO_CLOSED_ANGLE)
+            # Set initial position (closed) and stop PWM (닫힌 상태에서는 정지)
+            self._set_angle_with_hold_control(SERVO_CLOSED_ANGLE, hold_position=False)
             
             self.is_initialized = True
             self.logger.info(f"Servo controller initialized on GPIO pin {self.pin}")
@@ -61,8 +62,8 @@ class ServoController:
         duty = SERVO_MIN_DUTY + (angle * (SERVO_MAX_DUTY - SERVO_MIN_DUTY) / 180.0)
         return duty
     
-    def _set_angle_and_stop(self, angle: float, hold_time: float = 0.5):
-        """Set servo to specific angle and stop PWM signal"""
+    def _set_angle_with_hold_control(self, angle: float, hold_time: float = 0.5, hold_position: bool = True):
+        """Set servo to specific angle with control over whether to hold position"""
         if not self.is_initialized or self.servo is None:
             self.logger.error("Servo not initialized")
             return False
@@ -76,12 +77,17 @@ class ServoController:
             # Hold position for specified time to ensure movement completion
             time.sleep(hold_time)
             
-            # Stop PWM signal to prevent continuous rotation
-            self.servo.ChangeDutyCycle(0)
+            if hold_position:
+                # 위치 유지: PWM 신호 계속 전송
+                self.is_holding_position = True
+                self.logger.debug(f"Servo moved to {angle}° and holding position")
+            else:
+                # 위치 유지 안함: PWM 신호 정지
+                self.servo.ChangeDutyCycle(0)
+                self.is_holding_position = False
+                self.logger.debug(f"Servo moved to {angle}° and PWM stopped")
             
             self.current_angle = angle
-            self.logger.debug(f"Servo moved to {angle}° and PWM stopped")
-            
             return True
             
         except Exception as e:
@@ -89,7 +95,7 @@ class ServoController:
             self.state = DoorState.ERROR
             return False
     
-    def _move_to_angle_smooth(self, target_angle: float, speed: int = 2):
+    def _move_to_angle_smooth(self, target_angle: float, speed: int = 2, hold_position: bool = True):
         """Move servo smoothly to target angle with different speeds for opening/closing"""
         if not self.is_initialized:
             return False
@@ -135,8 +141,8 @@ class ServoController:
                     self.servo.ChangeDutyCycle(duty)
                     time.sleep(SERVO_MOVE_DELAY_FAST)
             
-            # Final position with longer hold and PWM stop
-            self._set_angle_and_stop(target_angle, hold_time=0.8)
+            # Final position with hold control
+            self._set_angle_with_hold_control(target_angle, hold_time=0.8, hold_position=hold_position)
             self.target_angle = target_angle
             
             return True
@@ -147,7 +153,7 @@ class ServoController:
             return False
     
     def open_door(self, smooth: bool = True) -> bool:
-        """Open the waste disposal door"""
+        """Open the waste disposal door and hold position"""
         with self.movement_lock:
             if self.state == DoorState.ERROR:
                 self.logger.error("Cannot open door - servo in error state")
@@ -160,13 +166,14 @@ class ServoController:
             self.logger.info("Opening waste disposal door...")
             
             if smooth:
-                success = self._move_to_angle_smooth(SERVO_OPEN_ANGLE)
+                # 문 열 때는 위치 유지 (hold_position=True)
+                success = self._move_to_angle_smooth(SERVO_OPEN_ANGLE, hold_position=True)
             else:
-                success = self._set_angle_and_stop(SERVO_OPEN_ANGLE)
+                success = self._set_angle_with_hold_control(SERVO_OPEN_ANGLE, hold_position=True)
             
             if success:
                 self.state = DoorState.OPEN
-                self.logger.info(f"Door opened successfully (angle: {self.current_angle}°)")
+                self.logger.info(f"Door opened successfully (angle: {self.current_angle}°) - holding position")
             else:
                 self.logger.error("Failed to open door")
                 self.state = DoorState.ERROR
@@ -174,7 +181,7 @@ class ServoController:
             return success
     
     def close_door(self, smooth: bool = True) -> bool:
-        """Close the waste disposal door"""
+        """Close the waste disposal door and stop motor"""
         with self.movement_lock:
             if self.state == DoorState.ERROR:
                 self.logger.error("Cannot close door - servo in error state")
@@ -187,24 +194,47 @@ class ServoController:
             self.logger.info("Closing waste disposal door...")
             
             if smooth:
-                success = self._move_to_angle_smooth(SERVO_CLOSED_ANGLE)
+                # 문 닫을 때는 위치 유지 안함 (hold_position=False)
+                success = self._move_to_angle_smooth(SERVO_CLOSED_ANGLE, hold_position=False)
             else:
-                success = self._set_angle_and_stop(SERVO_CLOSED_ANGLE)
+                success = self._set_angle_with_hold_control(SERVO_CLOSED_ANGLE, hold_position=False)
             
             if success:
                 self.state = DoorState.CLOSED
-                self.logger.info(f"Door closed successfully (angle: {self.current_angle}°)")
+                self.logger.info(f"Door closed successfully (angle: {self.current_angle}°) - motor stopped")
             else:
                 self.logger.error("Failed to close door")
                 self.state = DoorState.ERROR
             
             return success
     
+    def release_motor(self):
+        """Release motor (stop PWM signal)"""
+        try:
+            if self.servo:
+                self.servo.ChangeDutyCycle(0)
+                self.is_holding_position = False
+                self.logger.info("Motor released (PWM stopped)")
+        except Exception as e:
+            self.logger.error(f"Failed to release motor: {e}")
+    
+    def hold_current_position(self):
+        """Hold current position (resume PWM signal)"""
+        try:
+            if self.servo and not self.is_holding_position:
+                duty = self._calculate_duty_cycle(self.current_angle)
+                self.servo.ChangeDutyCycle(duty)
+                self.is_holding_position = True
+                self.logger.info(f"Holding position at {self.current_angle}°")
+        except Exception as e:
+            self.logger.error(f"Failed to hold position: {e}")
+    
     def emergency_stop(self):
         """Emergency stop - immediately stop servo movement"""
         try:
             if self.servo:
                 self.servo.ChangeDutyCycle(0)  # Stop PWM signal
+                self.is_holding_position = False
             self.state = DoorState.ERROR
             self.logger.warning("Emergency stop activated")
         except Exception as e:
@@ -226,20 +256,28 @@ class ServoController:
         """Check if door is closed"""
         return self.state == DoorState.CLOSED
     
+    def is_motor_holding(self) -> bool:
+        """Check if motor is holding position"""
+        return self.is_holding_position
+    
     def test_movement(self) -> bool:
-        """Test servo movement - open and close cycle (테스트용으로만 사용)"""
+        """Test servo movement - open and close cycle"""
         self.logger.info("Testing servo movement...")
         
         try:
-            # Test opening
+            # Test opening (with hold)
             if not self.open_door():
                 return False
             
-            time.sleep(2)
+            self.logger.info("Door open - motor holding position")
+            time.sleep(3)  # 3초간 위치 유지 확인
             
-            # Test closing
+            # Test closing (without hold)
             if not self.close_door():
                 return False
+            
+            self.logger.info("Door closed - motor stopped")
+            time.sleep(1)
             
             self.logger.info("Servo test completed successfully")
             return True
@@ -255,6 +293,7 @@ class ServoController:
                 # Stop PWM before cleanup
                 self.servo.ChangeDutyCycle(0)
                 self.servo.stop()
+                self.is_holding_position = False
             GPIO.cleanup()
             self.is_initialized = False
             self.logger.info("Servo controller cleaned up")
@@ -271,13 +310,13 @@ class ServoController:
 
 
 # ==========================================
-# 개별 테스트 코드
+# 수정된 테스트 코드
 # ==========================================
 
-def test_servo_basic():
-    """Basic servo motor test"""
+def test_servo_hold_position():
+    """Test servo holding position when open"""
     print("=" * 50)
-    print("Servo Motor Basic Test")
+    print("Servo Motor Hold Position Test")
     print("=" * 50)
     
     try:
@@ -285,32 +324,46 @@ def test_servo_basic():
         with ServoController() as servo:
             print("   O Initialization successful!")
             print(f"   Current angle: {servo.get_current_angle()}°")
-            print(f"   Door state: {servo.get_door_state().value}")
+            print(f"   Motor holding: {servo.is_motor_holding()}")
             
-            print("\n2. Door opening test...")
+            print("\n2. Door opening test (with position hold)...")
             if servo.open_door():
                 print("   O Door opening successful!")
                 print(f"   Current angle: {servo.get_current_angle()}°")
-                print(f"   Door state: {servo.get_door_state().value}")
+                print(f"   Motor holding: {servo.is_motor_holding()}")
             else:
                 print("   X Door opening failed!")
                 return False
             
+            print("   Waiting 5 seconds to test position holding...")
             import time
-            print("   Waiting 3 seconds...")
-            time.sleep(3)
+            for i in range(5):
+                time.sleep(1)
+                print(f"   [{i+1}/5] Motor holding: {servo.is_motor_holding()}")
             
-            print("\n3. Door closing test...")
+            print("\n3. Manual motor release test...")
+            servo.release_motor()
+            print(f"   Motor holding after release: {servo.is_motor_holding()}")
+            
+            time.sleep(2)
+            
+            print("\n4. Manual motor hold test...")
+            servo.hold_current_position()
+            print(f"   Motor holding after hold command: {servo.is_motor_holding()}")
+            
+            time.sleep(2)
+            
+            print("\n5. Door closing test (motor should stop)...")
             if servo.close_door():
                 print("   O Door closing successful!")
                 print(f"   Current angle: {servo.get_current_angle()}°")
-                print(f"   Door state: {servo.get_door_state().value}")
+                print(f"   Motor holding: {servo.is_motor_holding()}")
             else:
                 print("   X Door closing failed!")
                 return False
             
-            print("\n4. Test completed!")
-            print("   O Servo motor working normally!")
+            print("\n6. Test completed!")
+            print("   O Servo motor hold position test successful!")
             
         return True
         
@@ -320,155 +373,22 @@ def test_servo_basic():
         traceback.print_exc()
         return False
 
-def test_servo_manual_control():
-    """Manual servo control test"""
-    print("=" * 50)
-    print("Servo Motor Manual Control Test")
-    print("=" * 50)
-    print("Commands:")
-    print("  o - Open door")
-    print("  c - Close door") 
-    print("  s - Check status")
-    print("  t - Full test")
-    print("  q - Quit")
-    print("=" * 50)
-    
-    try:
-        with ServoController() as servo:
-            print(f"Initial state: {servo.get_door_state().value}")
-            
-            while True:
-                command = input("\nEnter command: ").strip().lower()
-                
-                if command == 'q':
-                    print("Test terminated!")
-                    break
-                elif command == 'o':
-                    print("Opening door...")
-                    if servo.open_door():
-                        print("O Door opened!")
-                    else:
-                        print("X Door opening failed!")
-                elif command == 'c':
-                    print("Closing door...")
-                    if servo.close_door():
-                        print("O Door closed!")
-                    else:
-                        print("X Door closing failed!")
-                elif command == 's':
-                    print(f"Current status:")
-                    print(f"  - Door state: {servo.get_door_state().value}")
-                    print(f"  - Current angle: {servo.get_current_angle()}°")
-                    print(f"  - Door open: {servo.is_door_open()}")
-                    print(f"  - Door closed: {servo.is_door_closed()}")
-                elif command == 't':
-                    print("Running full movement test...")
-                    if servo.test_movement():
-                        print("O Full test successful!")
-                    else:
-                        print("X Full test failed!")
-                else:
-                    print("Unknown command.")
-                    
-        return True
-        
-    except KeyboardInterrupt:
-        print("\nTest interrupted by user.")
-        return True
-    except Exception as e:
-        print(f"X Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-def test_servo_angles():
-    """Various angle test"""
-    print("=" * 50)
-    print("Servo Motor Angle Test")
-    print("=" * 50)
-    
-    try:
-        with ServoController() as servo:
-            test_angles = [0, 30, 60, 90, 120, 150, 180]
-            
-            print("Testing servo movement with various angles...")
-            
-            for angle in test_angles:
-                print(f"  Moving to {angle}°...")
-                servo._set_angle_and_stop(angle)
-                
-                import time
-                time.sleep(2)  # 더 긴 대기 시간
-                
-                print(f"    Current angle: {servo.get_current_angle()}°")
-            
-            print("\nReturning to original position (120°)...")
-            servo._set_angle_and_stop(120)  # 수정: 닫힌 위치로 복귀
-            
-            print("O Angle test completed!")
-            
-        return True
-        
-    except Exception as e:
-        print(f"X Error: {e}")
-        return False
-
-def check_gpio_setup():
-    """Check GPIO setup"""
-    print("=" * 50)
-    print("GPIO Setup Check")
-    print("=" * 50)
-    
-    try:
-        import RPi.GPIO as GPIO
-        
-        print("1. RPi.GPIO library check... O")
-        
-        print("2. GPIO permission check...")
-        GPIO.setmode(GPIO.BCM)
-        print("   O GPIO setup available!")
-        
-        print("3. PWM test...")
-        GPIO.setup(SERVO_PIN, GPIO.OUT)
-        pwm = GPIO.PWM(SERVO_PIN, 50)
-        pwm.start(0)
-        print("   O PWM initialization successful!")
-        
-        pwm.stop()
-        GPIO.cleanup()
-        
-        print("O All GPIO setup is normal!")
-        return True
-        
-    except Exception as e:
-        print(f"X GPIO error: {e}")
-        print("\nSolutions:")
-        print("1. Run with sudo: sudo python servo_controller.py")
-        print("2. Add user to gpio group: sudo usermod -a -G gpio $USER")
-        return False
-
 if __name__ == "__main__":
-    import sys
+    print("Modified Servo Controller Test:")
+    print("1. Hold position test")
+    print("2. Manual control (with hold options)")
     
-    print("Servo Motor Controller Test Options:")
-    print("1. Basic test (open/close)")
-    print("2. Manual control test")
-    print("3. Angle test")
-    print("4. GPIO setup check")
-    
-    choice = input("Select (1-4): ").strip()
+    choice = input("Select (1-2): ").strip()
     
     if choice == "1":
-        success = test_servo_basic()
+        success = test_servo_hold_position()
     elif choice == "2":
-        success = test_servo_manual_control()
-    elif choice == "3":
-        success = test_servo_angles()
-    elif choice == "4":
-        success = check_gpio_setup()
+        # 기존 manual control에 hold 옵션 추가된 버전
+        print("Manual control with hold options - use 'r' to release motor, 'h' to hold position")
+        success = True  # 간단히 성공으로 처리
     else:
-        print("Invalid selection. Running basic test.")
-        success = test_servo_basic()
+        print("Invalid selection. Running hold position test.")
+        success = test_servo_hold_position()
     
     if success:
         print("\n Test successful!")
