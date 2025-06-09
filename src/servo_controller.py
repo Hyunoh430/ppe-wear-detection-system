@@ -90,7 +90,7 @@ class ServoController:
             return False
     
     def _move_to_angle_smooth(self, target_angle: float, speed: int = 2):
-        """Move servo smoothly to target angle"""
+        """Move servo smoothly to target angle with different speeds for opening/closing"""
         if not self.is_initialized:
             return False
         
@@ -102,19 +102,38 @@ class ServoController:
             self.logger.debug(f"Already at target angle {target}°")
             return True
         
-        if current < target:
-            step = speed
-            angle_range = range(current, target + 1, step)
-        else:
-            step = -speed
-            angle_range = range(current, target - 1, step)
-        
         try:
-            # Move through intermediate angles quickly
-            for angle in angle_range[:-1]:  # Exclude last angle
-                duty = self._calculate_duty_cycle(angle)
-                self.servo.ChangeDutyCycle(duty)
-                time.sleep(SERVO_MOVE_DELAY)
+            # 문 여는 경우 (100도 → 70도, 빠르게)
+            if current == SERVO_CLOSED_ANGLE and target == SERVO_OPEN_ANGLE:
+                self.logger.debug("Opening door: fast movement (100° → 70°)")
+                for deg in range(current, target - 1, -1):
+                    duty = self._calculate_duty_cycle(deg)
+                    self.servo.ChangeDutyCycle(duty)
+                    time.sleep(SERVO_MOVE_DELAY_FAST)  # 빠른 속도 (0.005초)
+            
+            # 문 닫는 경우 (70도 → 100도, 천천히)
+            elif current == SERVO_OPEN_ANGLE and target == SERVO_CLOSED_ANGLE:
+                self.logger.debug("Closing door: slow movement (70° → 100°)")
+                for deg in range(current, target + 1):
+                    duty = self._calculate_duty_cycle(deg)
+                    self.servo.ChangeDutyCycle(duty)
+                    time.sleep(SERVO_MOVE_DELAY_SLOW)  # 느린 속도 (0.03초)
+            
+            # 기타 경우 (기존 로직 유지)
+            else:
+                self.logger.debug(f"General movement: {current}° → {target}°")
+                if current < target:
+                    step = speed
+                    angle_range = range(current, target + 1, step)
+                else:
+                    step = -speed
+                    angle_range = range(current, target - 1, step)
+                
+                # Move through intermediate angles quickly
+                for angle in angle_range[:-1]:  # Exclude last angle
+                    duty = self._calculate_duty_cycle(angle)
+                    self.servo.ChangeDutyCycle(duty)
+                    time.sleep(SERVO_MOVE_DELAY_FAST)
             
             # Final position with longer hold and PWM stop
             self._set_angle_and_stop(target_angle, hold_time=0.8)
