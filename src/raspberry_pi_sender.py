@@ -2,25 +2,26 @@ import cv2
 import socket
 import struct
 import time
+from picamera2 import Picamera2
 
 def send_video_to_computer():
-    # 컴퓨터 IP 주소
-    COMPUTER_IP = "172.20.10.15"  # 컴퓨터 IP
+    # 컴퓨터 IP 주소 (올바른 IP로 수정)
+    COMPUTER_IP = "172.20.10.4"  # 컴퓨터 실제 IP
     PORT = 9999
     
     print("Starting video sender...")
     print(f"Target computer: {COMPUTER_IP}:{PORT}")
     
-    # 카메라 설정
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        print("Error: Cannot open camera")
-        return
+    # Picamera2 설정
+    camera = Picamera2()
+    config = camera.create_preview_configuration(
+        main={"size": (640, 480), "format": "RGB888"}
+    )
+    camera.configure(config)
+    camera.start()
     
-    # 카메라 해상도 설정
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    cap.set(cv2.CAP_PROP_FPS, 20)
+    # 카메라 안정화 대기
+    time.sleep(2)
     
     print("Camera initialized")
     
@@ -34,14 +35,15 @@ def send_video_to_computer():
         start_time = time.time()
         
         while True:
-            ret, frame = cap.read()
-            if not ret:
-                print("Error: Cannot read frame from camera")
-                break
+            # Picamera2에서 프레임 캡처
+            frame = camera.capture_array()
+            
+            # RGB를 BGR로 변환 (OpenCV JPEG 인코딩용)
+            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
             
             # JPEG 압축 (품질 80%)
             encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
-            _, buffer = cv2.imencode('.jpg', frame, encode_param)
+            _, buffer = cv2.imencode('.jpg', frame_bgr, encode_param)
             data = buffer.tobytes()
             
             # 데이터 크기를 먼저 전송 (4바이트, big-endian)
@@ -70,7 +72,7 @@ def send_video_to_computer():
     except Exception as e:
         print(f"Error: {e}")
     finally:
-        cap.release()
+        camera.stop()
         sock.close()
         print("Camera released and connection closed")
 
