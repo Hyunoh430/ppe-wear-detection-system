@@ -35,15 +35,15 @@ def send_video_to_computer():
         start_time = time.time()
         
         while True:
-            # Picamera2에서 프레임 캡처
+            # Picamera2에서 프레임 캡처 (RGB 형식)
             frame = camera.capture_array()
             
-            # RGB를 BGR로 변환 (OpenCV JPEG 인코딩용)
-            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            # RGB 그대로 JPEG 인코딩
+            # OpenCV는 BGR을 기대하지만, RGB로도 인코딩 가능
             
             # JPEG 압축 (품질 80%)
             encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
-            _, buffer = cv2.imencode('.jpg', frame_bgr, encode_param)
+            _, buffer = cv2.imencode('.jpg', frame, encode_param)
             data = buffer.tobytes()
             
             # 데이터 크기를 먼저 전송 (4바이트, big-endian)
