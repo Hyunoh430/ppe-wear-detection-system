@@ -1,6 +1,6 @@
 """
-심플하고 깔끔한 폐기물 처리 시스템
-복잡한 기능 제거, 간단한 출력만
+로그 밀림 문제 완전 해결 버전
+모든 불필요한 출력 제거
 """
 
 import time
@@ -17,8 +17,13 @@ from config import *
 from ppe_detector import PPEDetector
 from servo_controller import ServoController, DoorState
 
-class SimpleKeyboardListener:
-    """간단한 키보드 리스너"""
+# 로깅 완전 비활성화
+logging.getLogger().setLevel(logging.CRITICAL)
+logging.getLogger('picamera2').setLevel(logging.CRITICAL)
+logging.getLogger('libcamera').setLevel(logging.CRITICAL)
+
+class QuietKeyboardListener:
+    """완전히 조용한 키보드 리스너"""
     
     def __init__(self):
         self.running = False
@@ -28,7 +33,6 @@ class SimpleKeyboardListener:
         self.lock = threading.Lock()
         
     def _getch(self):
-        """단일 문자 읽기"""
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
         try:
@@ -39,7 +43,6 @@ class SimpleKeyboardListener:
         return ch
     
     def _input_thread_function(self):
-        """키보드 입력 처리"""
         while self.running:
             try:
                 char = self._getch()
@@ -50,19 +53,16 @@ class SimpleKeyboardListener:
                 time.sleep(0.1)
     
     def start(self):
-        """시작"""
         self.running = True
         self.input_thread = threading.Thread(target=self._input_thread_function, daemon=True)
         self.input_thread.start()
     
     def stop(self):
-        """중지"""
         self.running = False
         if self.input_thread:
-            self.input_thread.join(timeout=1.0)
+            self.input_thread.join(timeout=0.5)
     
     def get_char(self):
-        """키 입력 가져오기"""
         with self.lock:
             if self.char_available:
                 char = self.latest_char
@@ -73,14 +73,15 @@ class SimpleKeyboardListener:
 
 class WasteDisposalSystem:
     def __init__(self):
-        """시스템 초기화"""
+        # 로거 완전 비활성화
         self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.CRITICAL)
         
         # 컴포넌트들
         self.ppe_detector: Optional[PPEDetector] = None
         self.servo_controller: Optional[ServoController] = None
         self.camera: Optional[Picamera2] = None
-        self.keyboard_listener = SimpleKeyboardListener()
+        self.keyboard_listener = QuietKeyboardListener()
         
         # 상태 변수들
         self.is_running = False
@@ -106,15 +107,12 @@ class WasteDisposalSystem:
         self._initialize_system()
     
     def _initialize_system(self):
-        """시스템 초기화"""
+        """시스템 초기화 - 최소한의 출력만"""
         try:
-            print("Loading PPE detector...")
+            # 아무 메시지 없이 초기화
             self.ppe_detector = PPEDetector()
-            
-            print("Initializing servo...")
             self.servo_controller = ServoController()
             
-            print("Starting camera...")
             self.camera = Picamera2()
             config = self.camera.create_preview_configuration(
                 main={"size": (CAMERA_WIDTH, CAMERA_HEIGHT), "format": CAMERA_FORMAT}
@@ -125,17 +123,25 @@ class WasteDisposalSystem:
             
             self.keyboard_listener.start()
             
-            # 간단한 시작 메시지만
-            print("\n" + "="*40)
-            print("PPE WASTE DISPOSAL SYSTEM")
-            print("="*40)
-            print("Press SPACE to start PPE detection")
-            print("Press Q to quit")
-            print("="*40)
+            # 한 번만 간단히 출력하고 끝
+            self._show_interface()
             
         except Exception as e:
-            print(f"Initialization failed: {e}")
+            print(f"Error: {e}")
             raise
+    
+    def _show_interface(self):
+        """인터페이스 한 번만 출력"""
+        # 화면 지우기
+        print('\033[2J\033[H', end='')
+        
+        print("=" * 40)
+        print("PPE WASTE DISPOSAL SYSTEM")
+        print("=" * 40)
+        print("Press SPACE to start PPE detection")
+        print("Press Q to quit")
+        print("=" * 40)
+        print("")
     
     def _handle_keyboard_input(self):
         """키보드 입력 처리"""
@@ -144,17 +150,15 @@ class WasteDisposalSystem:
             if char == ' ':  # SPACE
                 if not self.detection_in_progress:
                     self.detection_requested = True
-                    print(">>> PPE Detection Started <<<")
-                else:
-                    print(">>> Detection already running <<<")
+                    print("Detection Started")
                     
             elif char.lower() == 'q':  # Q
-                print(">>> Quitting <<<")
+                print("Quitting...")
                 self.stop_event.set()
                 
             elif char.lower() == 'r':  # R (리셋)
                 self._reset_detection()
-                print(">>> Reset <<<")
+                print("Reset")
     
     def _reset_detection(self):
         """감지 리셋"""
@@ -171,7 +175,7 @@ class WasteDisposalSystem:
             return False, "Door Open"
         
         if self.servo_controller.get_door_state() == DoorState.MOVING:
-            return False, "Door Moving"
+            return False, "Moving"
         
         if self.detection_requested and not self.detection_in_progress:
             self.detection_in_progress = True
@@ -181,7 +185,7 @@ class WasteDisposalSystem:
         if self.detection_in_progress:
             return True, "Active"
         
-        return False, "Wait for SPACE"
+        return False, "Press SPACE"
     
     def _process_frame(self, frame: np.ndarray) -> Dict[str, Any]:
         """프레임 처리"""
@@ -223,20 +227,20 @@ class WasteDisposalSystem:
         if is_compliant:
             if self.compliance_start_time is None:
                 self.compliance_start_time = current_time
-                print(">>> PPE Compliant - Timer Started <<<")
+                print("PPE OK - Timer Started")
             
             duration = current_time - self.compliance_start_time
             
             if duration >= PPE_CHECK_DURATION and self.servo_controller.is_door_closed():
-                print(f">>> Opening Door - PPE OK for {duration:.1f}s <<<")
+                print(f"Opening Door - PPE OK {duration:.1f}s")
                 if self.servo_controller.open_door():
                     self.door_open_time = current_time
                     self.stats['door_openings'] += 1
                     self.detection_in_progress = False
-                    print(">>> Door Opened <<<")
+                    print("Door Opened")
         else:
             if self.compliance_start_time is not None:
-                print(">>> PPE Compliance Lost <<<")
+                print("PPE Lost")
                 self.compliance_start_time = None
     
     def _handle_door_timeout(self, current_time: float):
@@ -247,15 +251,15 @@ class WasteDisposalSystem:
             if duration >= DOOR_OPEN_DURATION - 2 and duration < DOOR_OPEN_DURATION:
                 remaining = DOOR_OPEN_DURATION - duration
                 if int(remaining * 2) % 2 == 0:
-                    print(f">>> Door closes in {remaining:.1f}s <<<")
+                    print(f"Door closes in {remaining:.1f}s")
             
             if duration >= DOOR_OPEN_DURATION:
-                print(">>> Auto-closing Door <<<")
+                print("Closing Door")
                 if self.servo_controller.close_door():
                     self.door_open_time = None
                     self.compliance_start_time = None
                     self.detection_in_progress = False
-                    print(">>> Ready for next detection <<<")
+                    print("Ready")
     
     def _update_fps(self, current_time: float):
         """FPS 업데이트"""
@@ -266,7 +270,7 @@ class WasteDisposalSystem:
             self.last_fps_time = current_time
     
     def _print_status(self, result: Dict[str, Any]):
-        """상태 출력 (한 줄로, 감지 내용 전체 표시)"""
+        """상태 출력 (한 줄로 덮어쓰기)"""
         status_parts = []
         
         # FPS
@@ -279,13 +283,12 @@ class WasteDisposalSystem:
         # 감지 상태
         status_parts.append(f"Detection:{result.get('status_reason', 'Unknown')}")
         
-        # 감지된 PPE (전체 표시, 줄임 없이)
+        # 감지된 PPE (전체 표시)
         if result.get('inference_active', False) and result['detections']:
             detected_items = []
             for det in result['detections']:
                 item_name = det['class_name'].replace('_', ' ')
                 detected_items.append(f"{item_name}({det['confidence']:.2f})")
-            # 모든 감지 항목 표시 (줄임표 없이)
             detection_text = ", ".join(detected_items)
             status_parts.append(f"Found: {detection_text}")
         elif result.get('inference_active', False):
@@ -306,12 +309,11 @@ class WasteDisposalSystem:
         if self.door_open_time:
             door_duration = time.time() - self.door_open_time
             remaining = DOOR_OPEN_DURATION - door_duration
-            status_parts.append(f"AutoClose:{remaining:.1f}s")
+            status_parts.append(f"Close:{remaining:.1f}s")
         
         # 한 줄로 출력 (덮어쓰기)
         status_text = " | ".join(status_parts)
-        sys.stdout.write(f'\r{status_text}' + ' ' * 20)
-        sys.stdout.flush()
+        print(f'\r{status_text}' + ' ' * 10, end='', flush=True)
     
     def run(self):
         """메인 루프"""
@@ -349,15 +351,15 @@ class WasteDisposalSystem:
                     time.sleep(0.2)
         
         except KeyboardInterrupt:
-            print("\n>>> Ctrl+C - Shutting down <<<")
+            print("\nCtrl+C - Shutting down")
         except Exception as e:
-            print(f"\nSystem error: {e}")
+            print(f"\nError: {e}")
         finally:
             self.stop()
     
     def stop(self):
         """시스템 중지"""
-        print("\n>>> Stopping System <<<")
+        print("\nStopping...")
         self.stop_event.set()
         self.is_running = False
         self.cleanup()
@@ -376,7 +378,7 @@ class WasteDisposalSystem:
             
             self.keyboard_listener.stop()
             
-            print("Cleanup completed")
+            print("Done")
             
         except Exception as e:
             print(f"Cleanup error: {e}")
@@ -386,6 +388,4 @@ if __name__ == "__main__":
         system = WasteDisposalSystem()
         system.run()
     except Exception as e:
-        print(f"Failed to start: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Failed: {e}")
