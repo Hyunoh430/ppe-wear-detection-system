@@ -142,8 +142,8 @@ class ServoController:
             try:
                 if smooth:
                     # 부드러운 이동: 100도 → 70도 (빠르게)
-                    self.logger.info("Moving from 100° to 70°...")
-                    for deg in range(100, 69, -1):
+                    self.logger.info("Moving from 100° to 65°...")
+                    for deg in range(100, 64, -1):
                         duty = self._calculate_duty_cycle(deg)
                         self.servo.ChangeDutyCycle(duty)
                         time.sleep(0.005)
@@ -152,9 +152,9 @@ class ServoController:
                     self._move_to_angle_direct(70)
                 
                 # 위치 유지 스레드 시작
-                self.current_angle = 70
+                self.current_angle = 65
                 self.state = DoorState.OPEN
-                self._start_holding_position(70)
+                self._start_holding_position(65)
                 
                 self.logger.info("Door opened successfully - holding position with dedicated thread")
                 return True
@@ -185,7 +185,7 @@ class ServoController:
                 if smooth:
                     # 부드러운 이동: 70도 → 100도 (천천히)
                     self.logger.info("Moving from 70° to 100°...")
-                    for deg in range(70, 101):
+                    for deg in range(65, 101):
                         duty = self._calculate_duty_cycle(deg)
                         self.servo.ChangeDutyCycle(duty)
                         time.sleep(0.03)
@@ -242,20 +242,20 @@ class ServoController:
             
             # Open: 100 → 70 (fast)
             self.logger.info("Opening door (100° → 70°)...")
-            for deg in range(100, 69, -1):
+            for deg in range(100, 64, -1):
                 duty = self._calculate_duty_cycle(deg)
                 self.servo.ChangeDutyCycle(duty)
                 time.sleep(0.005)
             
             # Hold at 70 degrees for 3 seconds with thread
             self.logger.info("Holding at 70° for 3 seconds...")
-            self._start_holding_position(70)
+            self._start_holding_position(65)
             time.sleep(3.0)
             self._stop_holding_position()
             
             # Close: 70 → 100 (slow)
             self.logger.info("Closing door (70° → 100°)...")
-            for deg in range(70, 101):
+            for deg in range(65, 101):
                 duty = self._calculate_duty_cycle(deg)
                 self.servo.ChangeDutyCycle(duty)
                 time.sleep(0.03)
