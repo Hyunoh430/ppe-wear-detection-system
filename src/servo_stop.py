@@ -22,12 +22,12 @@ def servo_control(degree, delay=0.01):
     time.sleep(delay)
 
 try:
-    # Open: 100 → 63 (fast)
-    for deg in range(100, 62, -1):  # 100에서 67까지 빠르게 이동
+    # Open: 100 → 60 (fast)
+    for deg in range(100, 59, -1):  # 100에서 60까지 빠르게 이동
         servo_control(deg, delay=0.005)
 
-    # Hold at 63 degrees indefinitely
-    hold_duty = SERVO_MIN_DUTY + (63 * (SERVO_MAX_DUTY - SERVO_MIN_DUTY) / 180.0)
+    # Hold at 60 degrees indefinitely
+    hold_duty = SERVO_MIN_DUTY + (60 * (SERVO_MAX_DUTY - SERVO_MIN_DUTY) / 180.0)
     servo.ChangeDutyCycle(hold_duty)
 
     # Keep the servo in the open position until user interrupts
