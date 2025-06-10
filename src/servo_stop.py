@@ -26,12 +26,15 @@ try:
     for deg in range(100, 59, -1):  # 100에서 60까지 빠르게 이동
         servo_control(deg, delay=0.005)
 
-    # Hold at 60 degrees indefinitely
+    # Hold at 60 degrees
     hold_duty = SERVO_MIN_DUTY + (60 * (SERVO_MAX_DUTY - SERVO_MIN_DUTY) / 180.0)
     servo.ChangeDutyCycle(hold_duty)
 
-    # Keep the servo in the open position until user interrupts
-    input("Press Enter to exit...")
+    # Continuously check and send PWM signal every second to maintain the position
+    while True:
+        # Send PWM signal continuously to maintain the position at 60 degrees
+        servo.ChangeDutyCycle(hold_duty)
+        time.sleep(1)  # Continue to maintain the signal every second
 
 except KeyboardInterrupt:
     pass
