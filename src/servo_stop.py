@@ -23,11 +23,11 @@ def servo_control(degree, delay=0.01):
 
 try:
     # Open: 100 → 60 (fast)
-    for deg in range(100, 59, -1):  # 100에서 60까지 빠르게 이동
+    for deg in range(100, 64, -1):  # 100에서 60까지 빠르게 이동
         servo_control(deg, delay=0.005)
 
     # Hold at 60 degrees
-    hold_duty = SERVO_MIN_DUTY + (60 * (SERVO_MAX_DUTY - SERVO_MIN_DUTY) / 180.0)
+    hold_duty = SERVO_MIN_DUTY + (65 * (SERVO_MAX_DUTY - SERVO_MIN_DUTY) / 180.0)
     servo.ChangeDutyCycle(hold_duty)
 
     # Continuously check and send PWM signal every second to maintain the position
