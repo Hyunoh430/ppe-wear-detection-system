@@ -1,7 +1,8 @@
 """
-PPE 감지 + 영상 전송 통합 시스템
+PPE 감지 + 영상 전송 + 화재 알림 통합 시스템
 - 유휴 상태: 영상 전송
 - PPE 감지 중: 영상 전송 중단
+- 화재 알림: UDP로 수신하여 음성 경고
 """
 
 import time
@@ -49,6 +50,73 @@ def restore_output():
     """출력 복원"""
     sys.stdout = original_stdout
     sys.stderr = original_stderr
+
+class FireAlertListener:
+    """화재 알림 UDP 리스너"""
+    
+    def __init__(self, port: int = 8888):
+        self.port = port
+        self.running = False
+        self.thread = None
+        self.socket = None
+        self.last_alert_time = 0
+        self.alert_cooldown = 10  # 10초 쿨다운
+        
+    def start(self):
+        """리스너 시작"""
+        self.running = True
+        self.thread = threading.Thread(target=self._listen_for_alerts, daemon=True)
+        self.thread.start()
+        
+    def stop(self):
+        """리스너 중지"""
+        self.running = False
+        if self.socket:
+            self.socket.close()
+        if self.thread:
+            self.thread.join(timeout=1.0)
+    
+    def _listen_for_alerts(self):
+        """화재 알림 수신 스레드"""
+        try:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.socket.bind(('0.0.0.0', self.port))
+            self.socket.settimeout(1.0)  # 1초 타임아웃
+            
+            while self.running:
+                try:
+                    data, addr = self.socket.recvfrom(1024)
+                    current_time = time.time()
+                    
+                    # 쿨다운 체크 (중복 알림 방지)
+                    if current_time - self.last_alert_time < self.alert_cooldown:
+                        continue
+                    
+                    if data == b"FIRE_DETECTED":
+                        self._handle_fire_alert(addr[0])
+                        self.last_alert_time = current_time
+                        
+                except socket.timeout:
+                    continue
+                except Exception as e:
+                    if self.running:  # 정상 종료가 아닌 경우만 출력
+                        print(f"Fire alert listener error: {e}")
+                    
+        except Exception as e:
+            print(f"Failed to start fire alert listener: {e}")
+        finally:
+            if self.socket:
+                self.socket.close()
+    
+    def _handle_fire_alert(self, sender_ip: str):
+        """화재 알림 처리"""
+        try:
+            # 백그라운드에서 음성 경고 실행
+            os.system("espeak 'Fire detected! Emergency evacuation required!' -s 150 &")
+            print(f"\n🔥 FIRE ALERT from {sender_ip} - Voice warning activated!")
+        except Exception as e:
+            print(f"Error playing fire alert: {e}")
 
 class QuietKeyboardListener:
     """완전히 조용한 키보드 리스너"""
@@ -183,6 +251,9 @@ class WasteDisposalSystem:
         self.camera: Optional[Picamera2] = None
         self.keyboard_listener = QuietKeyboardListener()
         
+        # 화재 알림 리스너 추가
+        self.fire_alert_listener = FireAlertListener()
+        
         # 영상 스트리밍
         self.enable_video_streaming = enable_video_streaming
         self.video_streamer: Optional[VideoStreamer] = None
@@ -232,6 +303,9 @@ class WasteDisposalSystem:
             time.sleep(2)
             
             self.keyboard_listener.start()
+            
+            # 화재 알림 리스너 시작
+            self.fire_alert_listener.start()
             
             # 영상 스트리밍 연결 시도
             if self.video_streamer:
@@ -405,6 +479,10 @@ class WasteDisposalSystem:
             status_parts.append(f"Stream:{stream_status}({conn_status})")
             status_parts.append(f"Sent:{self.stats['frames_streamed']}")
         
+        # 화재 알림 상태
+        fire_status = "ON" if self.fire_alert_listener.running else "OFF"
+        status_parts.append(f"Fire:{fire_status}")
+        
         # 감지된 PPE (추론 중일 때만)
         if result.get('inference_active', False) and result['detections']:
             detected_items = []
@@ -488,6 +566,9 @@ class WasteDisposalSystem:
     def cleanup(self):
         """정리"""
         try:
+            # 화재 알림 리스너 중지
+            self.fire_alert_listener.stop()
+            
             if self.video_streamer:
                 self.video_streamer.disconnect()
             
@@ -507,16 +588,17 @@ class WasteDisposalSystem:
 
 if __name__ == "__main__":
     try:
-        # 영상 스트리밍 활성화하여 시스템 시작
+        # 영상 스트리밍 + 화재 알림 활성화하여 시스템 시작
         system = WasteDisposalSystem(
             enable_video_streaming=True, 
             target_computer_ip="172.20.10.4"  # 컴퓨터 IP
         )
         
-        print("Integrated PPE Detection + Video Streaming System")
+        print("Integrated PPE Detection + Video Streaming + Fire Alert System")
         print("Controls: SPACE=Start PPE Detection, R=Reset, Q=Quit")
         print("Mode: Streaming when idle, PPE detection when active")
-        print("-" * 60)
+        print("Fire Alert: Listening on UDP port 8888")
+        print("-" * 70)
         
         system.run()
     except Exception as e:
