@@ -1,8 +1,8 @@
 """
-개선된 화재 감지 시스템
-- 전용 화재 감지 모델 사용
-- 더 나은 전처리 및 감지 로직
-- 향상된 임계값 조정
+최적화된 화재 감지 시스템 - 성능 개선 버전
+- 가벼운 처리로 속도 향상
+- 메모리 사용량 최적화
+- 안정성 강화
 """
 
 import socket
@@ -15,373 +15,219 @@ import tkinter as tk
 from tkinter import messagebox
 from ultralytics import YOLO
 import torch
-import logging
-from pathlib import Path
+import gc
 
-class ImprovedFireDetector:
-    """개선된 화재 감지 클래스"""
+class OptimizedFireDetector:
+    """최적화된 화재 감지 클래스"""
     
-    def __init__(self, model_confidence: float = 0.5):
+    def __init__(self, model_confidence: float = 0.6):
         self.confidence_threshold = model_confidence
-        self.detection_buffer = []  # 연속 감지 체크용
-        self.buffer_size = 5  # 5프레임 연속 감지로 증가
+        self.detection_buffer = []
+        self.buffer_size = 3  # 다시 3프레임으로 축소
         self.model = None
         self.device = 'mps' if torch.backends.mps.is_available() else 'cpu'
         
-        # 화재/연기 관련 클래스 이름들 확장
-        self.fire_classes = [
-            'fire', 'flame', 'smoke', 'lighter', 'candle', 'torch', 
-            'match', 'cigarette', 'cigar', 'explosion', 'burning'
-        ]
+        # 프레임 처리 최적화 설정
+        self.process_every_n_frames = 2  # 2프레임마다 한 번씩 처리
+        self.frame_count = 0
+        self.last_detection_result = None
         
-        # 색상 기반 화재 감지용 HSV 범위
-        self.fire_color_ranges = [
-            # 빨간색 범위 (화염)
-            ([0, 50, 50], [10, 255, 255]),      # 낮은 빨간색
-            ([170, 50, 50], [180, 255, 255]),   # 높은 빨간색
-            # 주황색 범위 (화염)
-            ([10, 100, 100], [25, 255, 255]),
-            # 노란색 범위 (화염 중심부)
-            ([20, 100, 100], [30, 255, 255])
-        ]
+        # 간단한 색상 기반 감지만 추가
+        self.enable_color_detection = True
+        self.color_detection_threshold = 1000  # 최소 화재 픽셀 수
         
-        # 연기 감지용 그레이 범위
-        self.smoke_gray_range = ([90, 90, 90], [180, 180, 180])
-        
-        self._setup_logging()
         self._load_model()
     
-    def _setup_logging(self):
-        """로깅 설정"""
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s'
-        )
-        self.logger = logging.getLogger(__name__)
-    
     def _load_model(self):
-        """화재 감지 모델 로드"""
+        """가벼운 모델 로드"""
         try:
-            print("Loading improved fire detection model...")
+            print("Loading optimized fire detection model...")
             
-            # 1. 먼저 사전 훈련된 화재 감지 모델이 있는지 확인
-            custom_model_path = Path("fire_detection_model.pt")
+            # 가장 가벼운 nano 모델 사용
+            self.model = YOLO('yolov8n.pt')
             
-            if custom_model_path.exists():
-                print("Loading custom fire detection model...")
-                self.model = YOLO(str(custom_model_path))
-            else:
-                print("Custom model not found. Using YOLOv8 with optimized settings...")
-                # YOLOv8 medium 모델 사용 (더 나은 성능)
-                self.model = YOLO('yolov8m.pt')
+            # 모델 최적화 설정
+            if hasattr(self.model, 'fuse'):
+                self.model.fuse()  # 모델 최적화
             
-            # 모델 최적화
-            if self.device == 'mps':
-                print("Using Apple Silicon MPS acceleration")
-            else:
-                print(f"Using device: {self.device}")
-                
-            print("Fire detection model loaded successfully!")
+            print(f"Using device: {self.device}")
+            print("Optimized model loaded successfully!")
             
         except Exception as e:
             print(f"Error loading model: {e}")
             raise
     
     def _is_fire_related(self, class_name: str) -> bool:
-        """화재 관련 클래스인지 확인 (개선됨)"""
+        """화재 관련 클래스 확인 (최적화)"""
+        fire_keywords = ['fire', 'flame', 'smoke', 'lighter', 'candle', 'torch']
         class_name = class_name.lower()
-        
-        # 더 포괄적인 화재 관련 키워드
-        fire_keywords = [
-            'fire', 'flame', 'smoke', 'lighter', 'candle', 'torch', 
-            'match', 'cigarette', 'cigar', 'explosion', 'burning',
-            'campfire', 'bonfire', 'fireplace', 'furnace', 'oven',
-            'gas', 'steam', 'vapor'
-        ]
-        
         return any(keyword in class_name for keyword in fire_keywords)
     
-    def _color_based_fire_detection(self, frame: np.ndarray) -> dict:
-        """색상 기반 화재 감지"""
+    def _simple_color_detection(self, frame: np.ndarray) -> bool:
+        """간단한 색상 기반 화재 감지"""
+        if not self.enable_color_detection:
+            return False
+            
         try:
-            # BGR을 HSV로 변환
-            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            # 작은 크기로 리사이즈해서 처리 속도 향상
+            small_frame = cv2.resize(frame, (160, 120))
+            hsv = cv2.cvtColor(small_frame, cv2.COLOR_BGR2HSV)
             
-            fire_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
+            # 화재 색상 범위 (간단화)
+            lower_fire = np.array([0, 120, 120])
+            upper_fire = np.array([30, 255, 255])
             
-            # 화재 색상 범위들을 모두 확인
-            for lower_bound, upper_bound in self.fire_color_ranges:
-                lower = np.array(lower_bound)
-                upper = np.array(upper_bound)
-                mask = cv2.inRange(hsv, lower, upper)
-                fire_mask = cv2.bitwise_or(fire_mask, mask)
+            fire_mask = cv2.inRange(hsv, lower_fire, upper_fire)
+            fire_pixels = cv2.countNonZero(fire_mask)
             
-            # 노이즈 제거
-            kernel = np.ones((5, 5), np.uint8)
-            fire_mask = cv2.morphologyEx(fire_mask, cv2.MORPH_CLOSE, kernel)
-            fire_mask = cv2.morphologyEx(fire_mask, cv2.MORPH_OPEN, kernel)
+            # 임계값 이상의 화재 색상 픽셀이 있으면 True
+            return fire_pixels > self.color_detection_threshold
             
-            # 화재 영역 찾기
-            contours, _ = cv2.findContours(fire_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
-            fire_regions = []
-            for contour in contours:
-                area = cv2.contourArea(contour)
-                if area > 500:  # 최소 크기 필터
-                    x, y, w, h = cv2.boundingRect(contour)
-                    confidence = min(1.0, area / 10000)  # 영역 크기 기반 신뢰도
-                    
-                    fire_regions.append({
-                        'class_name': 'fire_color',
-                        'confidence': confidence,
-                        'bbox': [x, y, x + w, y + h],
-                        'area': area
-                    })
-            
-            return {
-                'detections': fire_regions,
-                'fire_mask': fire_mask
-            }
-            
-        except Exception as e:
-            self.logger.error(f"Color-based detection error: {e}")
-            return {'detections': [], 'fire_mask': None}
+        except Exception:
+            return False
     
-    def _motion_based_detection(self, frame: np.ndarray, prev_frame: np.ndarray = None) -> dict:
-        """움직임 기반 화재 감지 (화염의 flickering 특성 이용)"""
-        if prev_frame is None:
-            return {'has_motion': False, 'motion_areas': []}
+    def detect_fire(self, frame: np.ndarray) -> dict:
+        """최적화된 화재 감지"""
+        self.frame_count += 1
+        
+        # 매 N프레임마다만 처리 (성능 최적화)
+        if self.frame_count % self.process_every_n_frames != 0:
+            if self.last_detection_result is not None:
+                return self.last_detection_result
         
         try:
-            # 프레임 차이 계산
-            diff = cv2.absdiff(frame, prev_frame)
-            gray_diff = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+            detections = []
             
-            # 임계값 적용
-            _, motion_mask = cv2.threshold(gray_diff, 30, 255, cv2.THRESH_BINARY)
+            # 1. YOLO 감지 (메인)
+            try:
+                # 이미지 크기를 줄여서 처리 속도 향상
+                height, width = frame.shape[:2]
+                if width > 640:
+                    scale = 640 / width
+                    new_width = 640
+                    new_height = int(height * scale)
+                    resized_frame = cv2.resize(frame, (new_width, new_height))
+                else:
+                    resized_frame = frame
+                    scale = 1.0
+                
+                results = self.model(
+                    resized_frame, 
+                    conf=self.confidence_threshold,
+                    verbose=False,
+                    device=self.device
+                )
+                
+                for result in results:
+                    if result.boxes is not None:
+                        for box in result.boxes:
+                            class_id = int(box.cls[0])
+                            class_name = self.model.names[class_id]
+                            confidence = float(box.conf[0])
+                            
+                            if self._is_fire_related(class_name):
+                                # 좌표를 원본 크기로 복원
+                                x1, y1, x2, y2 = box.xyxy[0].tolist()
+                                if scale != 1.0:
+                                    x1, y1, x2, y2 = [coord/scale for coord in [x1, y1, x2, y2]]
+                                
+                                detections.append({
+                                    'class_name': class_name,
+                                    'confidence': confidence,
+                                    'bbox': [int(x1), int(y1), int(x2), int(y2)]
+                                })
+                
+            except Exception as e:
+                print(f"YOLO detection error: {e}")
             
-            # 노이즈 제거
-            kernel = np.ones((3, 3), np.uint8)
-            motion_mask = cv2.morphologyEx(motion_mask, cv2.MORPH_OPEN, kernel)
+            # 2. 간단한 색상 감지 (보조)
+            color_detected = self._simple_color_detection(frame)
+            if color_detected and len(detections) == 0:
+                # YOLO에서 못 찾았지만 색상으로 감지된 경우
+                detections.append({
+                    'class_name': 'fire_color',
+                    'confidence': 0.7,
+                    'bbox': [50, 50, 150, 150]  # 대략적인 위치
+                })
             
-            # 움직임 영역 찾기
-            contours, _ = cv2.findContours(motion_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
-            motion_areas = []
-            for contour in contours:
-                area = cv2.contourArea(contour)
-                if area > 200:  # 작은 노이즈 제거
-                    x, y, w, h = cv2.boundingRect(contour)
-                    motion_areas.append([x, y, x + w, y + h])
-            
-            return {
-                'has_motion': len(motion_areas) > 0,
-                'motion_areas': motion_areas
-            }
-            
-        except Exception as e:
-            self.logger.error(f"Motion detection error: {e}")
-            return {'has_motion': False, 'motion_areas': []}
-    
-    def detect_fire(self, frame: np.ndarray, prev_frame: np.ndarray = None) -> dict:
-        """통합 화재 감지 수행"""
-        try:
-            all_detections = []
-            
-            # 1. YOLO 기반 객체 감지
-            yolo_results = self.model(frame, conf=self.confidence_threshold, verbose=False)
-            
-            for result in yolo_results:
-                if result.boxes is not None:
-                    for box in result.boxes:
-                        class_id = int(box.cls[0])
-                        class_name = self.model.names[class_id]
-                        confidence = float(box.conf[0])
-                        
-                        if self._is_fire_related(class_name):
-                            x1, y1, x2, y2 = box.xyxy[0].tolist()
-                            all_detections.append({
-                                'class_name': f"yolo_{class_name}",
-                                'confidence': confidence,
-                                'bbox': [int(x1), int(y1), int(x2), int(y2)],
-                                'method': 'yolo'
-                            })
-            
-            # 2. 색상 기반 감지
-            color_result = self._color_based_fire_detection(frame)
-            all_detections.extend(color_result['detections'])
-            
-            # 3. 움직임 기반 감지 (화염의 flickering)
-            motion_result = self._motion_based_detection(frame, prev_frame)
-            
-            # 4. 다중 감지 결과 통합
-            final_detections = self._combine_detections(all_detections, motion_result)
-            
-            # 5. 연속 감지 체크 (더 엄격한 기준)
-            is_fire_detected = len(final_detections) > 0
+            # 3. 연속 감지 확인
+            is_fire_detected = len(detections) > 0
             self.detection_buffer.append(is_fire_detected)
             
             if len(self.detection_buffer) > self.buffer_size:
                 self.detection_buffer.pop(0)
             
-            # 5프레임 중 3프레임 이상에서 감지
+            # 3프레임 중 2프레임 이상
             consecutive_detections = sum(self.detection_buffer)
             fire_confirmed = (
                 len(self.detection_buffer) >= self.buffer_size and 
-                consecutive_detections >= 3
+                consecutive_detections >= 2
             )
             
-            return {
+            result = {
                 'fire_detected': fire_confirmed,
-                'detections': final_detections,
+                'detections': detections,
                 'raw_detection': is_fire_detected,
                 'buffer_count': consecutive_detections,
-                'color_mask': color_result.get('fire_mask'),
-                'motion_detected': motion_result['has_motion']
+                'color_detected': color_detected
             }
             
+            self.last_detection_result = result
+            
+            # 메모리 정리 (가끔씩)
+            if self.frame_count % 100 == 0:
+                gc.collect()
+            
+            return result
+            
         except Exception as e:
-            self.logger.error(f"Fire detection error: {e}")
+            print(f"Detection error: {e}")
             return {
                 'fire_detected': False,
                 'detections': [],
                 'raw_detection': False,
                 'buffer_count': 0,
-                'color_mask': None,
-                'motion_detected': False
+                'color_detected': False
             }
-    
-    def _combine_detections(self, detections: list, motion_result: dict) -> list:
-        """다중 감지 결과 통합"""
-        if not detections:
-            return []
-        
-        # IoU 기반으로 중복 제거
-        final_detections = []
-        
-        for detection in detections:
-            is_duplicate = False
-            bbox = detection['bbox']
-            
-            for existing in final_detections:
-                if self._calculate_iou(bbox, existing['bbox']) > 0.3:
-                    # 더 높은 신뢰도를 가진 감지 결과 유지
-                    if detection['confidence'] > existing['confidence']:
-                        final_detections.remove(existing)
-                        final_detections.append(detection)
-                    is_duplicate = True
-                    break
-            
-            if not is_duplicate:
-                final_detections.append(detection)
-        
-        # 움직임이 감지된 영역과 겹치는 경우 신뢰도 증가
-        if motion_result['has_motion']:
-            for detection in final_detections:
-                for motion_area in motion_result['motion_areas']:
-                    if self._calculate_iou(detection['bbox'], motion_area) > 0.2:
-                        detection['confidence'] = min(1.0, detection['confidence'] * 1.2)
-                        detection['motion_enhanced'] = True
-                        break
-        
-        return final_detections
-    
-    def _calculate_iou(self, box1: list, box2: list) -> float:
-        """IoU (Intersection over Union) 계산"""
-        x1_1, y1_1, x2_1, y2_1 = box1
-        x1_2, y1_2, x2_2, y2_2 = box2
-        
-        # 교집합 계산
-        x1_i = max(x1_1, x1_2)
-        y1_i = max(y1_1, y1_2)
-        x2_i = min(x2_1, x2_2)
-        y2_i = min(y2_1, y2_2)
-        
-        if x2_i <= x1_i or y2_i <= y1_i:
-            return 0.0
-        
-        intersection = (x2_i - x1_i) * (y2_i - y1_i)
-        
-        # 합집합 계산
-        area1 = (x2_1 - x1_1) * (y2_1 - y1_1)
-        area2 = (x2_2 - x1_2) * (y2_2 - y1_2)
-        union = area1 + area2 - intersection
-        
-        return intersection / union if union > 0 else 0.0
 
-class EnhancedFireAlertSystem:
-    """향상된 화재 알림 시스템"""
+class OptimizedFireAlertSystem:
+    """최적화된 화재 알림 시스템"""
     
     def __init__(self, raspberry_pi_ip: str = None):
         self.raspberry_pi_ip = raspberry_pi_ip
         self.last_alert_time = 0
-        self.alert_cooldown = 3  # 3초 쿨다운으로 단축
-        self.alert_count = 0
+        self.alert_cooldown = 5  # 5초 쿨다운
         
-    def send_udp_alert(self, detection_info: dict = None):
-        """라즈베리파이에 상세 UDP 알림 전송"""
+    def send_udp_alert(self):
+        """UDP 알림 전송"""
         if not self.raspberry_pi_ip:
-            print("Raspberry Pi IP not set - skipping UDP alert")
             return False
             
         try:
             udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            
-            # 상세 정보 포함 메시지 구성
-            message = "FIRE_DETECTED"
-            if detection_info:
-                confidence = max([d['confidence'] for d in detection_info.get('detections', [])] or [0])
-                message += f"|CONF:{confidence:.2f}|COUNT:{len(detection_info.get('detections', []))}"
-            
-            udp_socket.sendto(message.encode(), (self.raspberry_pi_ip, 8888))
+            udp_socket.sendto(b"FIRE_DETECTED", (self.raspberry_pi_ip, 8888))
             udp_socket.close()
-            
-            print(f"🔥 Fire alert sent to Raspberry Pi: {self.raspberry_pi_ip}")
-            print(f"   Message: {message}")
+            print(f"Fire alert sent to: {self.raspberry_pi_ip}")
             return True
-            
         except Exception as e:
-            print(f"Failed to send UDP alert: {e}")
+            print(f"UDP alert failed: {e}")
             return False
     
-    def show_popup_alert(self, detection_info: dict = None):
-        """향상된 컴퓨터 팝업 알림"""
+    def show_popup_alert(self):
+        """팝업 알림 (안전한 버전)"""
         try:
-            def show_alert():
-                root = tk.Tk()
-                root.withdraw()
-                root.attributes('-topmost', True)
-                
-                # 감지 정보 포함 메시지
-                message = "🔥 FIRE DETECTED!\n\nImmediate action required!"
-                
-                if detection_info and detection_info.get('detections'):
-                    detections = detection_info['detections']
-                    message += f"\n\nDetection Details:"
-                    message += f"\n• Objects detected: {len(detections)}"
-                    
-                    max_conf = max([d['confidence'] for d in detections])
-                    message += f"\n• Max confidence: {max_conf:.1%}"
-                    
-                    methods = set([d.get('method', 'unknown') for d in detections])
-                    message += f"\n• Detection methods: {', '.join(methods)}"
-                
-                messagebox.showerror("🚨 FIRE ALERT 🚨", message)
-                root.destroy()
-            
-            alert_thread = threading.Thread(target=show_alert, daemon=True)
-            alert_thread.start()
-            
-            self.alert_count += 1
-            print(f"🔥 FIRE ALERT #{self.alert_count} - Enhanced popup displayed!")
+            # 팝업 대신 콘솔 알림으로 변경 (안정성 향상)
+            print("🔥" * 20)
+            print("🚨 FIRE DETECTED! 🚨")
+            print("🔥 Take immediate action!")
+            print("🔥" * 20)
             return True
-            
         except Exception as e:
-            print(f"Failed to show popup alert: {e}")
+            print(f"Alert failed: {e}")
             return False
     
-    def trigger_alert(self, detection_info: dict = None):
-        """화재 알림 실행"""
+    def trigger_alert(self):
+        """알림 실행"""
         current_time = time.time()
         
         if current_time - self.last_alert_time < self.alert_cooldown:
@@ -389,145 +235,103 @@ class EnhancedFireAlertSystem:
         
         self.last_alert_time = current_time
         
-        popup_success = self.show_popup_alert(detection_info)
-        udp_success = self.send_udp_alert(detection_info)
+        popup_success = self.show_popup_alert()
+        udp_success = self.send_udp_alert()
         
         return popup_success or udp_success
 
-class EnhancedVideoReceiver:
-    """향상된 영상 수신 및 화재 감지 시스템"""
+class OptimizedVideoReceiver:
+    """최적화된 영상 수신기"""
     
     def __init__(self, port: int = 9999, raspberry_pi_ip: str = None):
         self.port = port
         self.raspberry_pi_ip = raspberry_pi_ip
         self.running = False
-        self.prev_frame = None
         
-        # 향상된 화재 감지 시스템
-        self.fire_detector = ImprovedFireDetector(model_confidence=0.4)  # 임계값 낮춤
-        self.fire_alert_system = EnhancedFireAlertSystem(raspberry_pi_ip)
+        # 최적화된 시스템
+        self.fire_detector = OptimizedFireDetector(model_confidence=0.5)
+        self.fire_alert_system = OptimizedFireAlertSystem(raspberry_pi_ip)
         
-        # 통계
+        # 간단한 통계
         self.stats = {
             'frames_received': 0,
             'fire_alerts': 0,
-            'false_positives': 0,
-            'start_time': None,
-            'detection_methods': {'yolo': 0, 'color': 0, 'motion': 0}
+            'start_time': None
         }
+        
+        # 프레임 처리 최적화
+        self.display_fps_limit = 15  # 화면 출력 FPS 제한
+        self.last_display_time = 0
     
-    def _draw_enhanced_detections(self, frame: np.ndarray, fire_result: dict) -> np.ndarray:
-        """향상된 감지 결과 그리기"""
-        for detection in fire_result['detections']:
+    def _draw_simple_detections(self, frame: np.ndarray, detections: list) -> np.ndarray:
+        """간단한 감지 결과 그리기"""
+        for detection in detections:
             bbox = detection['bbox']
             class_name = detection['class_name']
             confidence = detection['confidence']
-            method = detection.get('method', 'unknown')
             
-            # 감지 방법에 따른 색상 구분
-            if method == 'yolo':
-                color = (0, 0, 255)  # 빨간색
-            elif 'color' in class_name:
-                color = (0, 165, 255)  # 주황색
-            else:
-                color = (255, 0, 255)  # 자홍색
+            # 간단한 바운딩 박스
+            cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 0, 255), 2)
             
-            # 바운딩 박스
-            cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color, 2)
-            
-            # 라벨
+            # 간단한 라벨
             label = f"{class_name}: {confidence:.2f}"
-            if detection.get('motion_enhanced'):
-                label += " [M+]"
-            
-            # 텍스트 배경
-            (text_width, text_height), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
-            cv2.rectangle(frame, (bbox[0], bbox[1] - text_height - 8), 
-                         (bbox[0] + text_width, bbox[1]), color, -1)
-            
-            # 텍스트
-            cv2.putText(frame, label, (bbox[0], bbox[1] - 5), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        
-        # 색상 마스크 오버레이
-        if fire_result.get('color_mask') is not None:
-            colored_mask = cv2.applyColorMap(fire_result['color_mask'], cv2.COLORMAP_HOT)
-            frame = cv2.addWeighted(frame, 0.8, colored_mask, 0.2, 0)
+            cv2.putText(frame, label, (bbox[0], bbox[1] - 10), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
         
         return frame
     
-    def _add_enhanced_status_overlay(self, frame: np.ndarray, fire_result: dict) -> np.ndarray:
-        """향상된 상태 정보 오버레이"""
-        height, width = frame.shape[:2]
+    def _add_simple_status(self, frame: np.ndarray, fire_result: dict) -> np.ndarray:
+        """간단한 상태 표시"""
+        # 상태 텍스트
+        if fire_result['fire_detected']:
+            status = "🔥 FIRE DETECTED!"
+            color = (0, 0, 255)
+        elif fire_result['raw_detection']:
+            status = "⚠️ Fire Possible"
+            color = (0, 165, 255)
+        else:
+            status = "✅ No Fire"
+            color = (0, 255, 0)
+        
+        # 간단한 상태 박스
+        cv2.rectangle(frame, (10, 10), (300, 80), (0, 0, 0), -1)
+        cv2.rectangle(frame, (10, 10), (300, 80), color, 2)
         
         # 상태 텍스트
-        status_lines = [
-            f"Frames: {self.stats['frames_received']}",
-            f"Alerts: {self.stats['fire_alerts']}",
-            f"Buffer: {fire_result['buffer_count']}/5",
-            f"Motion: {'YES' if fire_result['motion_detected'] else 'NO'}"
-        ]
-        
-        # 감지 방법별 통계
-        yolo_count = len([d for d in fire_result['detections'] if d.get('method') == 'yolo'])
-        color_count = len([d for d in fire_result['detections'] if 'color' in d.get('class_name', '')])
-        
-        status_lines.extend([
-            f"YOLO: {yolo_count}, Color: {color_count}",
-        ])
-        
-        # 화재 감지 상태
-        if fire_result['fire_detected']:
-            status_lines.insert(0, "🔥 FIRE CONFIRMED!")
-            status_color = (0, 0, 255)
-        elif fire_result['raw_detection']:
-            status_lines.insert(0, "⚠️  Fire Detected")
-            status_color = (0, 165, 255)
-        else:
-            status_lines.insert(0, "✅ No Fire")
-            status_color = (0, 255, 0)
-        
-        # 배경 박스
-        box_height = len(status_lines) * 20 + 10
-        cv2.rectangle(frame, (10, 10), (320, box_height), (0, 0, 0), -1)
-        cv2.rectangle(frame, (10, 10), (320, box_height), status_color, 2)
-        
-        # 텍스트
-        for i, line in enumerate(status_lines):
-            y_pos = 25 + i * 20
-            color = status_color if i == 0 else (255, 255, 255)
-            cv2.putText(frame, line, (15, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+        cv2.putText(frame, status, (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+        cv2.putText(frame, f"Buffer: {fire_result['buffer_count']}/3", (15, 55), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        cv2.putText(frame, f"Frames: {self.stats['frames_received']}", (15, 70), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
         
         return frame
     
     def receive_video(self):
-        """향상된 영상 수신 및 화재 감지"""
+        """최적화된 영상 수신"""
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server_socket.bind(('0.0.0.0', self.port))
         server_socket.listen(1)
         
-        print("🔥 ENHANCED Fire Detection System Started!")
-        print(f"📡 Listening on port {self.port}")
-        print("🎯 Multi-method detection: YOLO + Color + Motion")
-        print("⚙️  Enhanced sensitivity settings active")
-        print("📺 Press 'q' in video window to quit")
-        print("-" * 60)
+        print("🔥 Optimized Fire Detection System")
+        print(f"📡 Port: {self.port}")
+        print("⚡ Performance optimized version")
+        print("📺 Press 'q' to quit")
+        print("-" * 40)
         
         try:
             self.running = True
             self.stats['start_time'] = time.time()
             
             while self.running:
-                print("⏳ Waiting for Raspberry Pi connection...")
+                print("Waiting for connection...")
                 client_socket, addr = server_socket.accept()
                 
                 if not self.raspberry_pi_ip:
                     self.raspberry_pi_ip = addr[0]
                     self.fire_alert_system.raspberry_pi_ip = addr[0]
                 
-                print(f"🔗 Connected from: {addr[0]}:{addr[1]}")
-                print("🔍 Starting enhanced fire detection...")
+                print(f"Connected: {addr[0]}")
                 
                 try:
                     while self.running:
@@ -556,82 +360,98 @@ class EnhancedVideoReceiver:
                         if frame is not None:
                             self.stats['frames_received'] += 1
                             
-                            # 향상된 화재 감지
-                            fire_result = self.fire_detector.detect_fire(frame, self.prev_frame)
+                            try:
+                                # 화재 감지
+                                fire_result = self.fire_detector.detect_fire(frame)
+                                
+                                # 화재 확인 시 알림 (안전한 처리)
+                                if fire_result['fire_detected']:
+                                    try:
+                                        if self.fire_alert_system.trigger_alert():
+                                            self.stats['fire_alerts'] += 1
+                                            print(f"🔥 FIRE ALERT #{self.stats['fire_alerts']} - Continuing monitoring...")
+                                    except Exception as alert_error:
+                                        print(f"Alert error (continuing): {alert_error}")
+                                
+                                # 화면 출력 FPS 제한 (성능 최적화)
+                                current_time = time.time()
+                                if current_time - self.last_display_time >= 1.0 / self.display_fps_limit:
+                                    self.last_display_time = current_time
+                                    
+                                    try:
+                                        # 시각화
+                                        display_frame = frame.copy()  # 원본 보호
+                                        
+                                        if fire_result['detections']:
+                                            display_frame = self._draw_simple_detections(display_frame, fire_result['detections'])
+                                        
+                                        display_frame = self._add_simple_status(display_frame, fire_result)
+                                        
+                                        cv2.imshow('🔥 Fire Detection (Optimized)', display_frame)
+                                    except Exception as display_error:
+                                        print(f"Display error (continuing): {display_error}")
+                                        # 기본 프레임이라도 표시
+                                        cv2.imshow('🔥 Fire Detection (Optimized)', frame)
+                                
+                            except Exception as detection_error:
+                                print(f"Detection error (continuing): {detection_error}")
+                                # 감지 실패 시에도 영상은 계속 표시
+                                cv2.imshow('🔥 Fire Detection (Optimized)', frame)
                             
-                            # 화재 확인 시 알림
-                            if fire_result['fire_detected']:
-                                if self.fire_alert_system.trigger_alert(fire_result):
-                                    self.stats['fire_alerts'] += 1
-                                    print(f"🚨 FIRE ALERT #{self.stats['fire_alerts']} TRIGGERED!")
-                            
-                            # 시각화
-                            frame = self._draw_enhanced_detections(frame, fire_result)
-                            frame = self._add_enhanced_status_overlay(frame, fire_result)
-                            
-                            cv2.imshow('🔥 Enhanced Fire Detection System', frame)
-                            
-                            # 이전 프레임 저장
-                            self.prev_frame = frame.copy()
-                            
-                            if cv2.waitKey(1) & 0xFF == ord('q'):
+                            # 키 입력 확인
+                            key = cv2.waitKey(1) & 0xFF
+                            if key == ord('q'):
+                                print("User requested quit")
                                 self.running = False
                                 break
                         
                 except Exception as e:
-                    print(f"Error during streaming: {e}")
+                    print(f"Streaming error: {e}")
+                    print("Attempting to reconnect...")
+                    # 연결 끊어져도 서버는 계속 실행
                 finally:
-                    client_socket.close()
+                    try:
+                        client_socket.close()
+                        print("Client disconnected")
+                    except:
+                        pass
                     
         except KeyboardInterrupt:
-            print("\n🛑 Interrupted by user")
+            print("\nStopped by user")
         except Exception as e:
-            print(f"❌ Server error: {e}")
+            print(f"Server error: {e}")
         finally:
             server_socket.close()
             cv2.destroyAllWindows()
-            self._print_final_stats()
+            self._print_stats()
     
-    def _print_final_stats(self):
-        """최종 통계 출력"""
+    def _print_stats(self):
+        """통계 출력"""
         if self.stats['start_time']:
             runtime = time.time() - self.stats['start_time']
-            print(f"\n{'='*50}")
-            print(f"🔥 ENHANCED FIRE DETECTION STATISTICS")
-            print(f"{'='*50}")
-            print(f"⏱️  Runtime: {runtime:.1f} seconds")
-            print(f"📊 Frames processed: {self.stats['frames_received']}")
-            print(f"🚨 Fire alerts: {self.stats['fire_alerts']}")
-            
+            print(f"\n--- Statistics ---")
+            print(f"Runtime: {runtime:.1f}s")
+            print(f"Frames: {self.stats['frames_received']}")
+            print(f"Alerts: {self.stats['fire_alerts']}")
             if runtime > 0:
-                fps = self.stats['frames_received'] / runtime
-                print(f"🎯 Average FPS: {fps:.1f}")
-                print(f"⚡ Alert rate: {self.stats['fire_alerts']/runtime*60:.1f} alerts/min")
-            
-            print(f"{'='*50}")
+                print(f"FPS: {self.stats['frames_received']/runtime:.1f}")
 
 def main():
     """메인 함수"""
-    print("🔥 ENHANCED Fire Detection System")
-    print("🎯 Multi-method detection (YOLO + Color + Motion)")
+    print("🔥 Optimized Fire Detection System")
+    print("⚡ Performance optimized for stable operation")
     print("-" * 50)
     
-    raspberry_pi_ip = None  # 자동 감지
-    
     try:
-        receiver = EnhancedVideoReceiver(
-            port=9999, 
-            raspberry_pi_ip=raspberry_pi_ip
-        )
+        receiver = OptimizedVideoReceiver(port=9999)
         receiver.receive_video()
         
     except Exception as e:
-        print(f"❌ Failed to start system: {e}")
-        print("\n🔧 Troubleshooting:")
+        print(f"Failed to start: {e}")
+        print("\nCheck:")
         print("1. pip install ultralytics torch opencv-python")
-        print("2. Check Raspberry Pi video stream")
-        print("3. Verify firewall settings (port 9999)")
-        print("4. Consider downloading a custom fire detection model")
+        print("2. Raspberry Pi connection")
+        print("3. Port 9999 availability")
 
 if __name__ == "__main__":
     main()
