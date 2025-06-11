@@ -83,7 +83,7 @@ class ServoController:
                 if self.servo and self.hold_angle is not None:
                     duty = self._calculate_duty_cycle(self.hold_angle)
                     self.servo.ChangeDutyCycle(duty)
-                time.sleep(0.1)  # 0.1초마다 PWM 신호 재전송
+                time.sleep(0.05)  # 0.1초마다 PWM 신호 재전송
             except Exception as e:
                 self.logger.error(f"Hold position thread error: {e}")
                 break

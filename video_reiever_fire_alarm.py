@@ -3,6 +3,7 @@
 - 가벼운 처리로 속도 향상
 - 메모리 사용량 최적화
 - 안정성 강화
+- 바운딩 박스 제거
 """
 
 import socket
@@ -16,6 +17,8 @@ from tkinter import messagebox
 from ultralytics import YOLO
 import torch
 import gc
+import psutil
+import os
 
 class OptimizedFireDetector:
     """최적화된 화재 감지 클래스"""
@@ -126,15 +129,9 @@ class OptimizedFireDetector:
                             confidence = float(box.conf[0])
                             
                             if self._is_fire_related(class_name):
-                                # 좌표를 원본 크기로 복원
-                                x1, y1, x2, y2 = box.xyxy[0].tolist()
-                                if scale != 1.0:
-                                    x1, y1, x2, y2 = [coord/scale for coord in [x1, y1, x2, y2]]
-                                
                                 detections.append({
                                     'class_name': class_name,
-                                    'confidence': confidence,
-                                    'bbox': [int(x1), int(y1), int(x2), int(y2)]
+                                    'confidence': confidence
                                 })
                 
             except Exception as e:
@@ -146,8 +143,7 @@ class OptimizedFireDetector:
                 # YOLO에서 못 찾았지만 색상으로 감지된 경우
                 detections.append({
                     'class_name': 'fire_color',
-                    'confidence': 0.7,
-                    'bbox': [50, 50, 150, 150]  # 대략적인 위치
+                    'confidence': 0.7
                 })
             
             # 3. 연속 감지 확인
@@ -252,33 +248,18 @@ class OptimizedVideoReceiver:
         self.fire_detector = OptimizedFireDetector(model_confidence=0.5)
         self.fire_alert_system = OptimizedFireAlertSystem(raspberry_pi_ip)
         
-        # 간단한 통계
+        # 간단한 통계 (발표용)
         self.stats = {
             'frames_received': 0,
             'fire_alerts': 0,
-            'start_time': None
+            'start_time': None,
+            'total_bytes': 0,  # 전송 데이터량
+            'detection_times': []  # 감지 처리 시간들
         }
         
         # 프레임 처리 최적화
         self.display_fps_limit = 15  # 화면 출력 FPS 제한
         self.last_display_time = 0
-    
-    def _draw_simple_detections(self, frame: np.ndarray, detections: list) -> np.ndarray:
-        """간단한 감지 결과 그리기"""
-        for detection in detections:
-            bbox = detection['bbox']
-            class_name = detection['class_name']
-            confidence = detection['confidence']
-            
-            # 간단한 바운딩 박스
-            cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 0, 255), 2)
-            
-            # 간단한 라벨
-            label = f"{class_name}: {confidence:.2f}"
-            cv2.putText(frame, label, (bbox[0], bbox[1] - 10), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-        
-        return frame
     
     def _add_simple_status(self, frame: np.ndarray, fire_result: dict) -> np.ndarray:
         """간단한 상태 표시"""
@@ -359,10 +340,14 @@ class OptimizedVideoReceiver:
                         
                         if frame is not None:
                             self.stats['frames_received'] += 1
+                            self.stats['total_bytes'] += frame_size  # 데이터량 누적
                             
                             try:
-                                # 화재 감지
+                                # 화재 감지 (처리 시간 측정)
+                                detection_start = time.time()
                                 fire_result = self.fire_detector.detect_fire(frame)
+                                detection_time = time.time() - detection_start
+                                self.stats['detection_times'].append(detection_time)
                                 
                                 # 화재 확인 시 알림 (안전한 처리)
                                 if fire_result['fire_detected']:
@@ -379,12 +364,8 @@ class OptimizedVideoReceiver:
                                     self.last_display_time = current_time
                                     
                                     try:
-                                        # 시각화
+                                        # 시각화 (바운딩 박스 없이 상태만 표시)
                                         display_frame = frame.copy()  # 원본 보호
-                                        
-                                        if fire_result['detections']:
-                                            display_frame = self._draw_simple_detections(display_frame, fire_result['detections'])
-                                        
                                         display_frame = self._add_simple_status(display_frame, fire_result)
                                         
                                         cv2.imshow('🔥 Fire Detection (Optimized)', display_frame)
@@ -426,15 +407,44 @@ class OptimizedVideoReceiver:
             self._print_stats()
     
     def _print_stats(self):
-        """통계 출력"""
+        """발표용 성능 통계 출력"""
         if self.stats['start_time']:
             runtime = time.time() - self.stats['start_time']
-            print(f"\n--- Statistics ---")
-            print(f"Runtime: {runtime:.1f}s")
-            print(f"Frames: {self.stats['frames_received']}")
-            print(f"Alerts: {self.stats['fire_alerts']}")
+            
+            print(f"\n{'='*50}")
+            print(f"🎯 PERFORMANCE REPORT (발표용)")
+            print(f"{'='*50}")
+            
+            # 기본 통계
+            print(f"⏱️  Runtime: {runtime:.1f}초")
+            print(f"📺 Total Frames: {self.stats['frames_received']:,}")
+            print(f"🔥 Fire Alerts: {self.stats['fire_alerts']}")
+            
+            # 성능 지표
             if runtime > 0:
-                print(f"FPS: {self.stats['frames_received']/runtime:.1f}")
+                fps = self.stats['frames_received'] / runtime
+                print(f"📊 Average FPS: {fps:.1f}")
+                
+                # 데이터 전송 속도
+                total_mb = self.stats['total_bytes'] / (1024 * 1024)
+                mbps = (self.stats['total_bytes'] * 8) / (runtime * 1000000)
+                print(f"📡 Data Transferred: {total_mb:.1f} MB")
+                #print(f"🚀 Transfer Speed: {mbps:.2f} Mbps")
+                
+                # 감지 성능
+                if self.stats['detection_times']:
+                    avg_detection = (sum(self.stats['detection_times']) / len(self.stats['detection_times'])) * 1000
+                    max_detection = max(self.stats['detection_times']) * 1000
+                    print(f"⚡ Avg Detection Time: {avg_detection:.1f}ms")
+                    print(f"⚡ Max Detection Time: {max_detection:.1f}ms")
+                
+                # 시스템 효율성
+                process = psutil.Process(os.getpid())
+                memory_mb = process.memory_info().rss / (1024 * 1024)
+                print(f"💾 Memory Usage: {memory_mb:.1f} MB")
+                
+            print(f"{'='*50}")
+            print(f"✅ 시스템 안정적으로 동작 완료!")
 
 def main():
     """메인 함수"""
