@@ -35,7 +35,7 @@ A Raspberry Pi-based Personal Protective Equipment (PPE) detection and waste dis
 
 1. **Clone Repository**
 ```bash
-git clone <repository-url>
+git clone https://github.com/Hyunoh430/ppe-wear-detection-system.git
 cd ppe-wear-detection-system
 ```
 
