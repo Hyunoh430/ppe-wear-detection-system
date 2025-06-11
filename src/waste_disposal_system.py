@@ -481,7 +481,7 @@ class WasteDisposalSystem:
         
         # 화재 알림 상태
         fire_status = "ON" if self.fire_alert_listener.running else "OFF"
-        status_parts.append(f"Fire:{fire_status}")
+        status_parts.append(f"Fire Detection:{fire_status}")
         
         # 감지된 PPE (추론 중일 때만)
         if result.get('inference_active', False) and result['detections']:

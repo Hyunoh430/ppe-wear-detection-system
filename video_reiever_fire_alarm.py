@@ -280,10 +280,10 @@ class OptimizedVideoReceiver:
         
         # 상태 텍스트
         cv2.putText(frame, status, (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-        cv2.putText(frame, f"Buffer: {fire_result['buffer_count']}/3", (15, 55), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        cv2.putText(frame, f"Frames: {self.stats['frames_received']}", (15, 70), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+        #cv2.putText(frame, f"Buffer: {fire_result['buffer_count']}/3", (15, 55), 
+        #           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        #cv2.putText(frame, f"Frames: {self.stats['frames_received']}", (15, 70), 
+        #           cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
         
         return frame
     
@@ -423,7 +423,7 @@ class OptimizedVideoReceiver:
             # 성능 지표
             if runtime > 0:
                 fps = self.stats['frames_received'] / runtime
-                print(f"📊 Average FPS: {fps:.1f}")
+                #print(f"📊 Average FPS: {fps:.1f}")
                 
                 # 데이터 전송 속도
                 total_mb = self.stats['total_bytes'] / (1024 * 1024)
