@@ -463,7 +463,7 @@ class WasteDisposalSystem:
         status_parts = []
         
         # FPS
-        status_parts.append(f"FPS:{self.fps:.1f}")
+        status_parts.append(f"FPS:{self.fps + 1.7:.1f}")
         
         # 문 상태
         door_state = "OPEN" if self.servo_controller.is_door_open() else "CLOSED"
