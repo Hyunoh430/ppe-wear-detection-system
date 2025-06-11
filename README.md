@@ -1,15 +1,18 @@
-# PPE Waste Disposal System
+# PPE Wear Detection System
 
 A Raspberry Pi-based Personal Protective Equipment (PPE) detection and waste disposal system. This system uses a YOLO model to detect mask, gloves, and goggles wearing in real-time, and only opens the waste disposal entrance when all protective equipment is properly worn.
 
 ## 🚀 Key Features
 
 - **Real-time PPE Detection**: High-performance object detection using YOLOv8 TFLite model
-- **Automatic Door Control**: Automatic opening/closing of waste disposal entrance via servo motor
-- **Safety Features**: 3-second continuous PPE verification before door opening
+- **Automatic Door Control**: Servo motor-controlled waste disposal entrance
+- **Video Streaming**: Real-time video transmission and web streaming capabilities
+- **Safety Compliance**: 3-second continuous PPE verification before access
 - **Auto Timer**: Automatic door closing after 5 seconds
-- **Real-time Monitoring**: Real-time logging of FPS, detection status, and door status
-- **Object-Oriented Design**: Modular code structure for improved maintainability
+- **System Monitoring**: Real-time FPS, detection status, and door monitoring
+- **Comprehensive Testing**: Built-in test suite for all components
+- **Remote Access**: Raspberry Pi communication and data transmission
+- **Object-Oriented Design**: Modular architecture for maintainability
 
 ## 📋 System Requirements
 
@@ -25,18 +28,20 @@ A Raspberry Pi-based Personal Protective Equipment (PPE) detection and waste dis
 - OpenCV
 - Picamera2
 - RPi.GPIO
+- Flask (for web streaming)
+- NumPy
 
 ## 🛠 Installation
 
 1. **Clone Repository**
 ```bash
 git clone <repository-url>
-cd ppe-waste-disposal-system
+cd ppe-wear-detection-system
 ```
 
 2. **Install Required Packages**
 ```bash
-pip install tensorflow-lite opencv-python numpy picamera2 RPi.GPIO
+pip install tensorflow-lite opencv-python numpy picamera2 RPi.GPIO flask
 ```
 
 3. **Prepare Model File**
@@ -52,44 +57,56 @@ mkdir models
 ## 📁 Project Structure
 
 ```
-ppe-waste-disposal-system/
+ppe-wear-detection-system/
 ├── src/
 │   ├── __init__.py              # Package initialization
-│   ├── config.py                # Configuration management
-│   ├── ppe_detector.py          # PPE detection class
-│   ├── servo_controller.py      # Servo motor control class
-│   ├── waste_disposal_system.py # Main system class
-│   └── utils.py                 # Utility functions
+│   ├── config.py                # Configuration settings
+│   ├── ppe_detector.py          # PPE detection with YOLO model
+│   ├── raspberry_pi_sender.py   # Raspberry Pi data transmission
+│   ├── servo_controller.py      # Servo motor control
+│   ├── utils.py                 # Utility functions and system checks
+│   ├── video_send.py           # Video streaming functionality
+│   ├── waste_disposal_system.py # Main integrated system
+│   └── README.md               # Comprehensive testing guide
 ├── models/
 │   └── best3_float32_v3.tflite  # YOLO model file
-├── logs/                        # Log file storage
-├── main.py                      # Main execution file
+├── logs/                        # System logs (auto-generated)
 └── README.md                    # Project documentation
 ```
 
 ## 🎯 Usage
 
-### Basic Execution
+### Main System Execution
 ```bash
-python main.py
+cd src
+python waste_disposal_system.py
 ```
 
-### Execution with Options
+### Individual Component Testing
 ```bash
-# Debug mode
-python main.py --debug
+# PPE Detection Test
+python ppe_detector.py
 
-# Use custom model
-python main.py --model path/to/model.tflite
+# Servo Motor Test  
+python servo_controller.py
 
-# Specify log file
-python main.py --log-file system.log
+# System Utilities Test
+python utils.py
 
-# Run component tests only
-python main.py --test-only
+# Video Streaming Test
+python video_send.py
 
-# Check system requirements
-python main.py --check-requirements
+# Raspberry Pi Communication Test
+python raspberry_pi_sender.py
+```
+
+### System Test Options
+When running `waste_disposal_system.py`, you'll see:
+```
+1. 시스템 초기화 테스트
+2. 단기 실행 테스트 (30초)
+3. 컴포넌트 통합 테스트
+4. 종료
 ```
 
 ### Execution Process
@@ -104,6 +121,26 @@ python main.py --check-requirements
 4. **Timer Start**: 3-second continuous PPE verification
 5. **Door Opening**: Automatic opening when conditions are met
 6. **Auto Closing**: Automatic door closing after 5 seconds
+
+## 🧪 Testing and Validation
+
+### Comprehensive Test Suite
+The system includes a detailed testing framework. For complete testing instructions, see [`src/README.md`](src/README.md).
+
+### Quick Test Scenarios
+```bash
+# 1. Hardware Environment Check
+cd src && python utils.py  # Select option 6
+
+# 2. PPE Detection Validation  
+python ppe_detector.py     # Test with various PPE combinations
+
+# 3. Servo Motor Function Test
+python servo_controller.py # Test door open/close operations
+
+# 4. Video Streaming Test
+python video_send.py      # Verify camera and streaming
+```
 
 ## ⚙️ Configuration Customization
 
@@ -122,6 +159,11 @@ CONFIDENCE_THRESHOLD = 0.3
 # Servo motor angle settings
 SERVO_CLOSED_ANGLE = 20   # Closed state
 SERVO_OPEN_ANGLE = 120    # Open state
+
+# Video streaming settings
+VIDEO_WIDTH = 640
+VIDEO_HEIGHT = 480
+STREAM_PORT = 5000
 ```
 
 ## 🔧 Hardware Connection
@@ -147,6 +189,7 @@ The system logs the following information in real-time:
 - **Door Status**: Open/closed/moving status
 - **Compliance**: PPE wearing compliance status
 - **Statistics**: Total frames, detection count, door opening count
+- **Video Stream**: Real-time video transmission status
 
 ## 🛡 Safety Features
 
@@ -154,6 +197,7 @@ The system logs the following information in real-time:
 - **Auto Recovery**: Return to safe state when errors occur
 - **Permission Check**: Verify GPIO and camera access permissions
 - **Resource Cleanup**: Automatic resource release on system shutdown
+- **System Health Monitoring**: Continuous component status checking
 
 ## 🐛 Troubleshooting
 
@@ -163,7 +207,7 @@ The system logs the following information in real-time:
 sudo usermod -a -G gpio $USER
 
 # Or run with sudo
-sudo python main.py
+sudo python waste_disposal_system.py
 ```
 
 ### Camera Errors
@@ -171,21 +215,46 @@ sudo python main.py
 # Check camera activation
 sudo raspi-config
 # -> Interface Options -> Camera -> Enable
+
+# Test camera manually
+libcamera-hello --timeout 2000
 ```
 
 ### Model File Errors
 - Verify correct TFLite file exists in `models/` directory
 - Check file path and permissions
+- Ensure model file is not corrupted
+
+### Video Streaming Issues
+```bash
+# Check network connectivity
+ping <target-ip>
+
+# Verify Flask installation
+python -c "import flask; print(flask.__version__)"
+```
 
 ## 📈 Performance Optimization
 
 Recommendations for optimal performance on Raspberry Pi:
 
 1. **Model Optimization**: Use quantized TFLite models
-2. **Resolution Adjustment**: Adjust camera resolution as needed
+2. **Resolution Adjustment**: Adjust camera resolution as needed (default: 640x480)
 3. **CPU Overclocking**: Improve CPU performance within stable limits
+4. **Memory Management**: Monitor and optimize memory usage
+5. **Network Optimization**: Use appropriate video compression for streaming
 
+## 🌐 Network Features
 
+### Video Streaming
+- Real-time video streaming via Flask server
+- Configurable stream quality and resolution
+- Multiple client support
+
+### Data Transmission
+- Raspberry Pi to external system communication
+- JSON-based data protocol
+- Real-time status updates
 
 ## 👥 Development Team
 
@@ -197,3 +266,6 @@ Recommendations for optimal performance on Raspberry Pi:
 - [ ] Cloud logging integration
 - [ ] Mobile app integration
 - [ ] AI model performance improvements
+- [ ] Multi-camera support
+- [ ] Advanced analytics and reporting
+- [ ] IoT platform integration
