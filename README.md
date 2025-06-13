@@ -23,7 +23,7 @@ A Raspberry Pi-based Personal Protective Equipment (PPE) detection and waste dis
 - GPIO connection jumper wires
 
 ### Software
-- Python 3.7+
+- Python 3.8
 - TensorFlow Lite
 - OpenCV
 - Picamera2
