@@ -114,7 +114,7 @@ When running `waste_disposal_system.py`, you'll see:
 1. **System Start**: Initialize all components
 2. **PPE Detection Wait**: Real-time monitoring with camera
 3. **Condition Check**: 
-   - ✅ Mask worn (`with_mask`)
+   - ✅ Mask worn (`with_mask`) (Incorrect mask ❌, Without mask ❌)
    - ✅ Gloves worn (`with_gloves`) 
    - ✅ Goggles worn (`goggles_on`)
    - ❌ No improper wearing
